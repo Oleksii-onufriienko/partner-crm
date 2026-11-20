@@ -212,6 +212,7 @@ def add_growth(db, ids, rnd, today=None, created_by=None, deals=True):
 
 
 # ---------------------------------------------------------------- наставничество и ежедневная работа (демо)
+DEMO_NOTE = "[демо] Fürsprechergespräch"
 ORGA_WELL = ["Провёл все запланированные первые термины", "Договорился о 4 терминах за один вечер",
              "Получил 6 рекомендаций после бератунга", "Взял на Info двух кандидатов", "Закрыл первую сделку по BU"]
 ORGA_WHY = ["Звонил по плану каждый вечер", "Готовился к разговору по AK1", "Сразу просил рекомендации",
@@ -244,6 +245,7 @@ def add_coaching(db, ids, rnd, today=None, created_by=None):
     for table, col in (("orga_checks", "person_id"), ("reflections", "person_id"), ("onboarding", "person_id"),
                        ("calls", "owner_id"), ("future_goals", "person_id"), ("muster_blocks", "person_id")):
         db.execute(f"DELETE FROM {table} WHERE {col} IN ({marks})", ids)
+    db.execute(f"DELETE FROM meetings WHERE owner_id IN ({marks}) AND note = ?", [*ids, DEMO_NOTE])
     people = {r[0]: {"id": r[0], "parent": r[1], "stufe": r[2], "start": r[3], "coef": r[4]} for r in db.execute(
         f"SELECT id, parent_id, stufe, start_date, coef FROM persons WHERE id IN ({marks})", ids)}
     keys = ["service", "lead", "planning", "contact", "evidence", "analysis", "referrals", "recruit", "consult"]
@@ -323,9 +325,10 @@ def add_coaching(db, ids, rnd, today=None, created_by=None):
             md = start + dt.timedelta(days=5 + 4 * i)
             if md < today:
                 db.execute("""INSERT INTO meetings (owner_id, contact_id, date, time, duration_min, format, stage, status,
-                                                    created_by, created_at)
-                              VALUES (?, ?, ?, '18:00', 60, 'offline', 'advocate', 'done', ?, ?)""",
-                           (p["id"], cid, md.isoformat(), p["id"], (md - dt.timedelta(days=3)).isoformat() + " 12:00:00"))
+                                                    note, created_by, created_at)
+                              VALUES (?, ?, ?, '18:00', 60, 'offline', 'advocate', 'done', ?, ?, ?)""",
+                           (p["id"], cid, md.isoformat(), DEMO_NOTE, p["id"],
+                            (md - dt.timedelta(days=3)).isoformat() + " 12:00:00"))
         # Звонки за последние 10 дней
         contacts = [r[0] for r in db.execute("SELECT id FROM contacts WHERE owner_id = ? AND status != 'no_chance'", (p["id"],))]
         if contacts:
