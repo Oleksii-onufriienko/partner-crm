@@ -747,6 +747,13 @@ def meeting_delete(mid):
 def stats():
     pid = _pid_arg()
     p = get_person(pid)
+    # Настройки «слабых мест»: сохраняем за пользователем и возвращаемся на ту же страницу
+    weak_action = request.args.get("weak")
+    if weak_action in ("1", "reset"):
+        S.save_weak_settings(S.weak_settings_from_form(request.args) if weak_action == "1" else None)
+        keep = {k: v for k, v in request.args.items()
+                if k in ("person", "period", "from", "to", "scope")}
+        return redirect(url_for("main.stats", **keep) + "#weak")
     key, start, end, label = S.period_from_args(request.args)
     vp = visible_persons()
     b = branch_ids(pid)
@@ -763,7 +770,17 @@ def stats():
                          "size": len(kb)})
     partners.sort(key=lambda x: (-x["m"]["deal_ke"], -x["m"]["done"]))
 
-    sig = S.signals([vp[i] for i in b])
+    weak_cfg = S.weak_settings()
+    all_sig = S.signals([vp[i] for i in b], weak_cfg, all_rules=True)
+    enabled = [k for k in C.WEAK_RULE_KEYS if weak_cfg["rules"][k]["on"]]
+    rule_counts = {k: sum(1 for i in b if any(x.key == k for x in all_sig.get(i, []))) for k in C.WEAK_RULE_KEYS}
+    sig = {}
+    for i in b:
+        found = [x for x in all_sig.get(i, []) if x.key in enabled]
+        keys = {x.key for x in found}
+        if weak_cfg["match"] == "all" and enabled and not set(enabled) <= keys:
+            found = []
+        sig[i] = found
 
     def chain(person_id):
         """Цепочка бетроеров от просматриваемого человека до наставника этого партнёра."""
@@ -786,6 +803,7 @@ def stats():
     return render_template("stats.html", p=p, key=key, start=start, end=end, label=label,
                            own=own, total=total, shown=shown, scope=scope, partners=partners,
                            weak=weak, funnel=funnel, branch_size=len(b), periods=S.PERIODS, chart=chart,
+                           weak_cfg=weak_cfg, rule_counts=rule_counts, weak_enabled=enabled,
                            options=person_options(), rate=S.rate)
 
 

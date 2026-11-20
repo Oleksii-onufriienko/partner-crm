@@ -2,9 +2,12 @@
 (KE × коэффициент его ступени) и только потом складываются по структуре."""
 
 import datetime as dt
+import json
+
+from flask import g
 
 from . import constants as C
-from .db import query
+from .db import execute, query
 from .util import MONTHS_NOM, fmt_date, month_bounds, monday, parse_date, plural, today
 
 PERIODS = [
@@ -147,16 +150,80 @@ def rate(part, whole):
     return round(100 * part / whole) if whole else None
 
 
-def signals(persons):
-    """Слабые места на сегодня: {person_id: [текст, ...]}."""
+class Signal(str):
+    """Текст сигнала, который помнит, по какому признаку он сработал (.key)."""
+    def __new__(cls, key, text):
+        obj = str.__new__(cls, text)
+        obj.key = key
+        return obj
+
+
+def weak_defaults():
+    return {"match": "any",
+            "rules": {key: {"on": True, "n": dflt} for key, _, _, dflt, *_ in C.WEAK_RULES}}
+
+
+def _user_prefs():
+    user = getattr(g, "user", None)
+    if not user or "prefs" not in user.keys() or not user["prefs"]:
+        return {}
+    try:
+        data = json.loads(user["prefs"])
+        return data if isinstance(data, dict) else {}
+    except ValueError:
+        return {}
+
+
+def weak_settings():
+    """Настройки слабых мест текущего пользователя (с проверкой значений)."""
+    s = weak_defaults()
+    saved = _user_prefs().get("weak") or {}
+    if saved.get("match") in ("any", "all"):
+        s["match"] = saved["match"]
+    for key, _, after, dflt, lo, hi, _ in C.WEAK_RULES:
+        r = (saved.get("rules") or {}).get(key) or {}
+        if isinstance(r.get("on"), bool):
+            s["rules"][key]["on"] = r["on"]
+        if dflt is not None and isinstance(r.get("n"), int) and lo <= r["n"] <= hi:
+            s["rules"][key]["n"] = r["n"]
+    return s
+
+
+def save_weak_settings(settings):
+    prefs = _user_prefs()
+    if settings is None:
+        prefs.pop("weak", None)
+    else:
+        prefs["weak"] = settings
+    execute("UPDATE persons SET prefs = ? WHERE id = ?", (json.dumps(prefs, ensure_ascii=False), g.user["id"]))
+
+
+def weak_settings_from_form(form):
+    from .util import parse_int
+    s = weak_defaults()
+    s["match"] = form.get("match") if form.get("match") in ("any", "all") else "any"
+    for key, _, after, dflt, lo, hi, _ in C.WEAK_RULES:
+        s["rules"][key]["on"] = form.get(f"w_{key}") == "1"
+        if dflt is not None:
+            n = parse_int(form.get(f"n_{key}"))
+            s["rules"][key]["n"] = min(max(n, lo), hi) if n is not None else dflt
+    return s
+
+
+def signals(persons, settings=None, all_rules=False):
+    """Слабые места на сегодня: {person_id: [Signal, ...]}.
+    Учитываются только включённые признаки (all_rules=True — все, для счётчиков)."""
     persons = list(persons)
     if not persons:
         return {}
+    settings = settings or weak_settings()
+    rules = settings["rules"]
+    on = {k: (all_rules or rules[k]["on"]) for k in C.WEAK_RULE_KEYS}
     ids = [p["id"] for p in persons]
     marks = ",".join("?" * len(ids))
     t = today()
-    past = (t - dt.timedelta(days=C.NO_ACTIVITY_DAYS)).isoformat()
-    future = (t + dt.timedelta(days=C.EMPTY_PLAN_DAYS)).isoformat()
+    past = (t - dt.timedelta(days=rules["no_activity"]["n"])).isoformat()
+    future = (t + dt.timedelta(days=rules["empty_plan"]["n"])).isoformat()
     done_recent = {r["owner_id"]: r["n"] for r in query(
         f"""SELECT owner_id, COUNT(*) n FROM meetings WHERE owner_id IN ({marks})
             AND status = 'done' AND format != 'private' AND date BETWEEN ? AND ?
@@ -175,6 +242,10 @@ def signals(persons):
         f"""SELECT owner_id, COUNT(*) n FROM meetings WHERE owner_id IN ({marks})
             AND status = 'planned' AND format != 'private' AND date < ?
             GROUP BY owner_id""", [*ids, t.isoformat()])}
+    week = (t - dt.timedelta(days=t.weekday())).isoformat()
+    has_week_plan = {r["person_id"] for r in query(
+        f"""SELECT DISTINCT person_id FROM week_plan WHERE person_id IN ({marks})
+            AND week = ? AND soll IS NOT NULL""", [*ids, week])}
 
     out = {}
     for p in persons:
@@ -182,20 +253,24 @@ def signals(persons):
         if not p["active"]:
             out[pid] = lst
             continue
-        if not done_recent.get(pid):
-            lst.append(f"Нет проведённых встреч за {C.NO_ACTIVITY_DAYS} дней")
-        if not planned_ahead.get(pid):
-            lst.append(f"Пустой план на {C.EMPTY_PLAN_DAYS} дней вперёд")
-        n = contacts_n.get(pid, 0)
-        if n < C.MIN_MARKTPOTENZIAL:
-            lst.append(f"В Marktpotenzial {n} {plural(n, 'человек', 'человека', 'человек')} — "
-                       f"меньше минимума ({C.MIN_MARKTPOTENZIAL})")
-        if overdue.get(pid):
-            lst.append(f"Просрочено напоминаний: {overdue[pid]}")
-        if stale_planned.get(pid):
-            lst.append(f"Не отмечен итог прошедших встреч: {stale_planned[pid]}")
-        if p["coef"] is None:
-            lst.append("Не указан коэффициент €/KE")
+        if on["no_activity"] and not done_recent.get(pid):
+            lst.append(Signal("no_activity", f"Нет проведённых встреч за {rules['no_activity']['n']} "
+                                             f"{plural(rules['no_activity']['n'], 'день', 'дня', 'дней')}"))
+        if on["empty_plan"] and not planned_ahead.get(pid):
+            lst.append(Signal("empty_plan", f"Пустой план на {rules['empty_plan']['n']} "
+                                            f"{plural(rules['empty_plan']['n'], 'день', 'дня', 'дней')} вперёд"))
+        n, minimum = contacts_n.get(pid, 0), rules["low_potential"]["n"]
+        if on["low_potential"] and n < minimum:
+            lst.append(Signal("low_potential", f"В Marktpotenzial {n} {plural(n, 'человек', 'человека', 'человек')}"
+                                               f" — меньше минимума ({minimum})"))
+        if on["overdue"] and overdue.get(pid, 0) >= rules["overdue"]["n"]:
+            lst.append(Signal("overdue", f"Просрочено напоминаний: {overdue[pid]}"))
+        if on["stale"] and stale_planned.get(pid, 0) >= rules["stale"]["n"]:
+            lst.append(Signal("stale", f"Не отмечен итог прошедших встреч: {stale_planned[pid]}"))
+        if on["no_week_plan"] and pid not in has_week_plan:
+            lst.append(Signal("no_week_plan", "Не заполнен план на эту неделю"))
+        if on["no_coef"] and p["coef"] is None:
+            lst.append(Signal("no_coef", "Не указан коэффициент €/KE"))
         out[pid] = lst
     return out
 

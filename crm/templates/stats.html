@@ -120,8 +120,46 @@
 </section>
 {% endif %}
 
-<section class="panel" style="margin-top: 20px">
-  <div class="panel-head"><h2>Слабые места</h2><span class="muted small">на сегодня</span></div>
+<section class="panel" style="margin-top: 20px" id="weak">
+  <div class="panel-head"><h2>Слабые места</h2><span class="muted small">на сегодня, {{ weak|length }} {{ plural(weak|length, 'человек', 'человека', 'человек') }}</span></div>
+
+  <form class="weak-filters" method="get" action="{{ url_for('main.stats') }}">
+    <input type="hidden" name="weak" value="1">
+    <input type="hidden" name="person" value="{{ p['id'] }}">
+    <input type="hidden" name="period" value="{{ key }}">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    {% if key == 'custom' %}<input type="hidden" name="from" value="{{ start.isoformat() }}"><input type="hidden" name="to" value="{{ end.isoformat() }}">{% endif %}
+    <div class="wf-rules">
+      {% for rkey, before, after, dflt, lo, hi, help in C.WEAK_RULES %}
+      {% set r = weak_cfg.rules[rkey] %}
+      <div class="wf-rule{{ ' off' if not r.on }}" title="{{ help }}">
+        <input type="checkbox" id="w_{{ rkey }}" name="w_{{ rkey }}" value="1"{% if r.on %} checked{% endif %} data-autosubmit>
+        <label for="w_{{ rkey }}">{{ before }}</label>
+        {% if dflt is not none %}<input type="number" name="n_{{ rkey }}" value="{{ r.n }}" min="{{ lo }}" max="{{ hi }}" aria-label="{{ before }} {{ after }}: порог">{% if after %}<label for="w_{{ rkey }}">{{ after }}</label>{% endif %}{% endif %}
+        <span class="wf-count" title="Сколько людей подпадает под этот признак">{{ rule_counts[rkey] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="wf-foot">
+      <span class="wf-match" role="radiogroup" aria-label="Как объединять признаки">
+        <label><input type="radio" name="match" value="any"{% if weak_cfg.match == 'any' %} checked{% endif %} data-autosubmit> хотя бы один признак</label>
+        <label><input type="radio" name="match" value="all"{% if weak_cfg.match == 'all' %} checked{% endif %} data-autosubmit> все отмеченные сразу</label>
+      </span>
+      <span class="grow"></span>
+      <button class="btn small">Применить</button>
+      <a class="btn small ghost" href="{{ url_for('main.stats', weak='reset', person=p['id'], period=key, scope=scope) }}">По умолчанию</a>
+    </div>
+    <details class="wf-help">
+      <summary>Как определяются слабые места</summary>
+      <ul>
+        {% for rkey, before, after, dflt, lo, hi, help in C.WEAK_RULES %}
+        <li><b>{{ before }}{% if dflt is not none %} N{% if after %} {{ after }}{% endif %}{% endif %}.</b> {{ help }}</li>
+        {% endfor %}
+        <li>Неактивные люди не учитываются. Настройки сохраняются за вами и действуют на всех страницах: «Сегодня», «Команда», карточка партнёра.</li>
+      </ul>
+    </details>
+  </form>
+
   {% if weak %}
   <ul class="item-list">
     {% for who, sigs, path in weak %}
@@ -134,6 +172,8 @@
       <ul class="signals grow">{% for x in sigs %}<li>{{ x }}</li>{% endfor %}</ul></li>
     {% endfor %}
   </ul>
-  {% else %}<ul class="signals none"><li>Слабых мест не найдено.</li></ul>{% endif %}
+  {% elif not weak_enabled %}
+  <p class="empty">Все признаки выключены. Отметьте хотя бы один, чтобы увидеть людей.</p>
+  {% else %}<ul class="signals none"><li>По отмеченным признакам слабых мест не найдено.</li></ul>{% endif %}
 </section>
 {% endblock %}

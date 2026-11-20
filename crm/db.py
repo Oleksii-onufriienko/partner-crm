@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS week_plan (
 # Изменения схемы для уже существующих баз: (таблица, колонка, определение)
 MIGRATIONS = [
     ("deals", "source", "TEXT NOT NULL DEFAULT 'consult'"),
+    ("persons", "prefs", "TEXT"),          # личные настройки пользователя (JSON)
 ]
 
 

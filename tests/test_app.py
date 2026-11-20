@@ -312,6 +312,43 @@ class ChartTest(Base):
         self.assertIn(b'data-chart=', c.get("/stats?period=year&scope=team").data)
 
 
+class WeakSettingsTest(Base):
+    def test_filter_by_single_rule_with_threshold(self):
+        c = self.client_for("admin@demo.local")
+        r = c.get("/stats?scope=team&weak=1&w_low_potential=1&n_low_potential=50&match=any")
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r.headers["Location"].endswith("#weak"))
+        page = c.get("/stats?scope=team").data.decode()
+        weak = page.split('id="weak"', 1)[1]
+        self.assertIn("меньше минимума (50)", weak)
+        self.assertNotIn("Пустой план на", weak.split("Как определяются")[1].split("</details>")[1])
+        # настройки действуют и на других страницах
+        pavel = self.pid("Вебер")
+        card = c.get(f"/people/{pavel}").data.decode()
+        self.assertIn("меньше минимума (50)", card)
+        self.assertNotIn("Пустой план на", card)
+
+    def test_match_all_and_reset(self):
+        c = self.client_for("admin@demo.local")
+        c.get("/stats?scope=team&weak=1&w_empty_plan=1&n_empty_plan=14&w_low_potential=1&n_low_potential=20&match=all")
+        page = c.get("/stats?scope=team").data.decode().split('id="weak"', 1)[1].split("</details>")[1]
+        # только люди, у кого оба признака сразу: Павел и Юлия (пустой план и мало контактов)
+        self.assertIn("Павел Вебер", page)
+        self.assertNotIn("Ирина Ланге</a>", page)
+        c.get("/stats?scope=team&weak=reset")
+        page = c.get("/stats?scope=team").data.decode()
+        self.assertIn("меньше минимума (20)", page)
+
+    def test_all_rules_off_and_clamping(self):
+        c = self.client_for("admin@demo.local")
+        c.get("/stats?scope=team&weak=1&match=any")
+        self.assertIn("Все признаки выключены", c.get("/stats?scope=team").data.decode())
+        c.get("/stats?scope=team&weak=1&w_no_activity=1&n_no_activity=99999")
+        page = c.get("/stats?scope=team").data.decode()
+        self.assertIn('name="n_no_activity" value="365"', page)
+        c.get("/stats?scope=team&weak=reset")
+
+
 class MigrationTest(unittest.TestCase):
     def test_old_database_gets_new_columns(self):
         import sqlite3

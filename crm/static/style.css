@@ -284,6 +284,27 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .signals li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn);
                       flex: none; transform: translateY(-1px); }
 .signals.none li::before { background: var(--primary); }
+/* «Слабые места»: настройки признаков */
+.weak-filters { margin: 0 0 16px; padding: 14px 16px; border-radius: var(--radius-s); background: var(--surface-2); }
+.wf-rules { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 8px 28px; }
+#weak { scroll-margin-top: 76px; }
+.wf-rule { display: flex; align-items: center; gap: 7px; font-size: 13.5px; min-height: 32px; }
+.wf-rule input[type=checkbox] { width: 17px; height: 17px; margin: 0; accent-color: var(--primary); flex: none; }
+.wf-rule label { cursor: pointer; white-space: nowrap; }
+.wf-rule input[type=number] { width: 64px; height: 30px; padding: 0 6px; text-align: right; font-size: 13.5px; }
+.wf-rule.off label, .wf-rule.off input[type=number] { color: var(--muted); }
+.wf-count { margin-left: auto; min-width: 26px; height: 22px; padding: 0 7px; border-radius: 999px; display: inline-grid; place-items: center;
+            background: var(--surface); color: var(--ink-2); font-size: 12px; font-weight: 600; border: 1px solid var(--line); }
+.wf-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.wf-match { display: inline-flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13.5px; }
+.wf-match label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.wf-match input { accent-color: var(--primary); margin: 0; }
+.wf-foot .grow { flex: 1; }
+.wf-help { margin-top: 10px; font-size: 13px; color: var(--ink-2); }
+.wf-help summary { cursor: pointer; }
+.wf-help ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+.wf-help b { color: var(--ink); font-weight: 600; }
+
 /* «Слабые места»: слева колонка фиксированной ширины, бетроеры выше — столбиком */
 .item-list li.weak-row { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 4px 24px; align-items: start; }
 .weak-who { display: grid; gap: 1px; min-width: 0; }
@@ -293,7 +314,8 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
                             white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .crumb-path li::after { content: " ›"; }
 .weak-row .signals { padding-top: 2px; }
-@media (max-width: 860px) { .item-list li.weak-row { grid-template-columns: 1fr; } }
+@media (max-width: 860px) { .item-list li.weak-row { grid-template-columns: 1fr; } .wf-rules { grid-template-columns: 1fr; }
+  .wf-rule { flex-wrap: wrap; } .wf-rule label { white-space: normal; } }
 
 /* ------------------------------------------------------------ Kontaktpyramide */
 .pyramid { display: grid; gap: 6px; }
