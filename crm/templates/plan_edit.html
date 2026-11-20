@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% block title %}План и факт: ввод{% endblock %}
+{% macro val(x) -%}{% if x is not none %}{{ '%g'|format(x) }}{% endif %}{%- endmacro %}
+{% block content %}
+{% set is_me = p['id'] == g.user['id'] %}
+{% set mkey = month.strftime('%Y-%m') %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ back }}">План и факт</a></p>
+    <h1>{{ month_name(month) }}{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <p class="sub">Впишите план на каждую неделю. В «Для всех недель» можно ввести число один раз — оно разойдётся по всем неделям строки.
+      Факт у строк «авто» считается сам: пустое поле — автоматически, число — ваша поправка.</p>
+  </div>
+  <div class="actions">
+    <form method="post" action="{{ url_for('main.plan_copy', person=p['id'], month=mkey) }}" class="inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn">Взять план прошлого месяца</button>
+    </form>
+  </div>
+</header>
+
+<form method="post" class="panel flush">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="table-wrap">
+  <table class="table pf pf-edit">
+    <thead>
+      <tr>
+        <th rowspan="2" class="pf-label">Показатель</th>
+        <th rowspan="2" class="num pf-all">Для всех<br>недель</th>
+        {% for w in weeks %}<th colspan="2" class="pf-week">Неделя {{ loop.index }}<span class="sub">{{ week_label(w) }}</span></th>{% endfor %}
+      </tr>
+      <tr>{% for w in weeks %}<th class="num pf-s">План</th><th class="num">Факт</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+    {% for bkey, blabel in C.PLAN_BLOCKS %}
+      <tr class="pf-block"><td colspan="{{ weeks|length * 2 + 2 }}">{{ blabel }}</td></tr>
+      {% for key, mblock, label, de, auto in C.PLAN_METRICS if mblock == bkey %}
+      <tr data-row="{{ key }}">
+        <td class="pf-label">{{ label }}{% if auto %} <span class="auto-tag" title="Факт считается сам из встреч и сделок">авто</span>{% endif %}<span class="sub">{{ de }}</span></td>
+        <td class="num pf-all"><input type="text" inputmode="decimal" data-fill-row="{{ key }}" aria-label="{{ label }}: план для всех недель"></td>
+        {% for w in weeks %}{% set c = grid[w.isoformat()][key] %}
+        <td class="num pf-s"><input type="text" inputmode="decimal" class="s-in" name="s_{{ key }}_{{ w.isoformat() }}" value="{{ val(c.soll) }}" aria-label="{{ label }}, неделя {{ loop.index }}: план"></td>
+        <td class="num">{% if auto %}<input type="text" inputmode="decimal" name="i_{{ key }}_{{ w.isoformat() }}" value="{{ val(c.ist) if c.manual else '' }}" placeholder="{{ val(c.auto) }}" title="Пусто — считается автоматически ({{ val(c.auto) }})" aria-label="{{ label }}, неделя {{ loop.index }}: поправка факта">
+          {% else %}<input type="text" inputmode="decimal" name="i_{{ key }}_{{ w.isoformat() }}" value="{{ val(c.ist) }}" aria-label="{{ label }}, неделя {{ loop.index }}: факт">{% endif %}</td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="form-actions" style="padding: 0 22px 20px">
+    <button class="btn primary">Сохранить</button>
+    <a class="btn ghost" href="{{ back }}">Отмена</a>
+  </div>
+</form>
+{% endblock %}

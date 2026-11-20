@@ -4,6 +4,7 @@ from flask import (Blueprint, abort, flash, g, redirect, render_template, reques
                    session, url_for)
 
 from . import constants as C
+from . import plan as P
 from . import stats as S
 from .access import (branch_ids, can_manage, children_map, direct_children, get_person,
                      has_team, person_options, tree_rows, visible_ids, visible_persons)
@@ -101,7 +102,13 @@ def dashboard():
                 break
     birthdays.sort(key=lambda x: x["date"])
 
+    wk = [monday(t)]
+    week_grid = P.grids([me["id"]], wk)[me["id"]]
+    week_view = P.view(week_grid, wk)
+    has_week_plan = any(c["soll"] is not None for c in week_grid[wk[0].isoformat()].values())
+
     return render_template("dashboard.html", m=metrics, today_meetings=today_meetings,
+                           week_summary=week_view["summary"], has_week_plan=has_week_plan,
                            upcoming=upcoming, stale=stale, followups=followups, team=team,
                            birthdays=birthdays, month_label=S.period_from_args({})[3])
 
@@ -458,8 +465,9 @@ def deal_add(cid):
     if not product or not d:
         flash("Укажите дату и продукт сделки.", "error")
     else:
-        execute("INSERT INTO deals (contact_id, date, product, ke, note) VALUES (?, ?, ?, ?, ?)",
-                (cid, d.isoformat(), product, ke or 0, clean(request.form.get("note"), 300)))
+        execute("INSERT INTO deals (contact_id, date, product, ke, note, source) VALUES (?, ?, ?, ?, ?, ?)",
+                (cid, d.isoformat(), product, ke or 0, clean(request.form.get("note"), 300),
+                 _choice(request.form.get("source"), C.DEAL_SOURCES, "consult")))
         # Если оформили то, что было в потенциале, — убираем из потенциала
         pot = parse_int(request.form.get("from_potential"))
         if pot:
@@ -653,3 +661,86 @@ def stats():
                            own=own, total=total, shown=shown, scope=scope, partners=partners,
                            weak=weak, funnel=funnel, branch_size=len(b), periods=S.PERIODS,
                            options=person_options(), rate=S.rate)
+
+
+# ---------------------------------------------------------------- план/факт по неделям
+
+def _month_arg():
+    raw = request.values.get("month") or ""
+    try:
+        y, m = (int(x) for x in raw.split("-")[:2])
+        return dt.date(y, m, 1)
+    except ValueError:
+        return today().replace(day=1)
+
+
+def _shift_month(d, delta):
+    m = d.month - 1 + delta
+    return dt.date(d.year + m // 12, m % 12 + 1, 1)
+
+
+@bp.route("/plan")
+@login_required
+def plan():
+    pid = _pid_arg()
+    p = get_person(pid)
+    month = _month_arg()
+    weeks = P.month_weeks(month.year, month.month)
+    b = branch_ids(pid)
+    scope = "team" if request.args.get("scope") == "team" and len(b) > 1 else "me"
+    ids = b if scope == "team" else [pid]
+    vp = visible_persons()
+    grids = P.grids(ids, weeks)
+    combined = P.combine(grids.values(), weeks) if scope == "team" else grids[pid]
+    v = P.view(combined, weeks)
+    eur = P.euros(grids, vp, weeks)
+
+    partners = []
+    if scope == "team":
+        for k in direct_children(pid):
+            kb = branch_ids(k["id"])
+            t = P.month_totals(P.combine([grids[i] for i in kb], weeks), weeks)
+            partners.append({"p": k, "size": len(kb),
+                             "cells": [{"soll": t[key]["soll"], "ist": t[key]["ist"],
+                                        "pct": P.pct(t[key]["ist"], t[key]["soll"])}
+                                       for key, _ in C.PLAN_SUMMARY]})
+        own_t = P.month_totals(grids[pid], weeks)
+        partners.insert(0, {"p": p, "size": 1, "own": True,
+                            "cells": [{"soll": own_t[key]["soll"], "ist": own_t[key]["ist"],
+                                       "pct": P.pct(own_t[key]["ist"], own_t[key]["soll"])}
+                                      for key, _ in C.PLAN_SUMMARY]})
+
+    return render_template("plan.html", p=p, month=month, weeks=weeks, v=v, eur=eur, scope=scope,
+                           branch_size=len(b), partners=partners, quotas=P.quotas(v["totals"]),
+                           week_label=P.week_label, prev=_shift_month(month, -1),
+                           next=_shift_month(month, 1), options=person_options())
+
+
+@bp.route("/plan/edit", methods=["GET", "POST"])
+@login_required
+def plan_edit():
+    pid = _pid_arg()
+    p = get_person(pid)
+    month = _month_arg()
+    weeks = P.month_weeks(month.year, month.month)
+    back = url_for("main.plan", person=pid, month=month.strftime("%Y-%m"))
+    if request.method == "POST":
+        P.save(pid, weeks, request.form, g.user["id"])
+        flash("План и факт сохранены.", "ok")
+        return redirect(back)
+    grid = P.grids([pid], weeks)[pid]
+    return render_template("plan_edit.html", p=p, month=month, weeks=weeks, grid=grid,
+                           week_label=P.week_label, back=back)
+
+
+@bp.route("/plan/copy", methods=["POST"])
+@login_required
+def plan_copy():
+    pid = _pid_arg()
+    get_person(pid)
+    month = _month_arg()
+    weeks = P.month_weeks(month.year, month.month)
+    n = P.copy_previous(pid, weeks, g.user["id"])
+    flash("План прошлого месяца перенесён в пустые недели." if n
+          else "В прошлом месяце плана нет — переносить нечего.", "ok" if n else "error")
+    return redirect(url_for("main.plan_edit", person=pid, month=month.strftime("%Y-%m")))

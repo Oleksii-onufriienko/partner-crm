@@ -335,6 +335,50 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .pl-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; font-size: 13px; color: var(--muted); align-items: center; }
 .pl-legend .mt { display: inline-block; padding: 1px 8px; }
 
+/* ------------------------------------------------------------ план/факт */
+.kpis .meter { display: block; height: 4px; margin-top: 8px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.kpis .meter i { display: block; height: 100%; width: var(--w); background: var(--warn); border-radius: 2px; }
+.kpis .meter i.full { background: var(--primary); }
+.pf { font-size: 13.5px; }
+.pf th, .pf td { padding: 8px 10px; }
+.pf .pf-label { position: sticky; left: 0; z-index: 1; background: var(--surface); min-width: 230px; max-width: 280px; }
+.pf thead .pf-label { z-index: 2; }
+.pf td.pf-label { font-weight: 500; }
+.pf td.pf-label .sub { font-weight: 400; }
+.pf .pf-week { text-align: center; border-left: 1px solid var(--line); color: var(--ink-2); }
+.pf .pf-week .sub { display: block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.pf .pf-s { border-left: 1px solid var(--line); color: var(--ink-2); }
+.pf .pf-i { font-weight: 600; }
+.pf .pf-i.hit { color: var(--primary); }
+.pf .pf-i.miss { color: var(--danger); }
+.pf td.hit, .pf td.miss { font-weight: 600; }
+.table td.hit { color: var(--primary); font-weight: 600; } .table td.miss { color: var(--danger); font-weight: 600; }
+.table td.hit .muted, .table td.miss .muted { font-weight: 400; }
+.pf .pf-i.future { color: var(--muted); font-weight: 400; }
+.pf .now { background: color-mix(in srgb, var(--primary-soft) 55%, transparent); }
+.pf .pf-total { background: color-mix(in srgb, var(--surface-2) 60%, transparent); }
+.pf tr.pf-block td { background: var(--surface-2); font-weight: 650; font-size: 13px; color: var(--ink); padding-top: 9px; padding-bottom: 9px; }
+.pf tr.pf-block td:first-child { position: sticky; left: 0; }
+.pf tbody tr:hover td { background: inherit; }
+.pf tbody tr:hover td.pf-label { background: var(--surface); }
+.auto-tag { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 500;
+            color: var(--primary); background: var(--primary-soft); vertical-align: 1px; }
+.manual { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.pf-edit .pf-label { min-width: 200px; }
+.pf-edit input { width: 56px; height: 32px; padding: 0 8px; text-align: right; font-size: 13.5px; }
+.pf-edit .pf-all { background: color-mix(in srgb, var(--primary-soft) 45%, transparent); border-left: 1px solid var(--line); }
+.pf-edit .pf-all input { border-style: dashed; }
+.pf-edit input::placeholder { color: var(--muted); font-style: italic; }
+.quotas { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 16px 24px; }
+.quotas li { display: grid; gap: 2px; }
+.quotas b { font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
+.quotas span { font-size: 13px; color: var(--muted); line-height: 1.35; }
+.week-plan { display: grid; gap: 10px; }
+.week-plan .wp-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: baseline; font-size: 14px; }
+.week-plan .wp-row .meter { grid-column: 1 / -1; display: block; height: 4px; border-radius: 2px; background: var(--surface-2); overflow: hidden; }
+.week-plan .wp-row .meter i { display: block; height: 100%; width: var(--w); background: var(--warn); }
+.week-plan .wp-row .meter i.full { background: var(--primary); }
+
 /* ------------------------------------------------------------ toolbar / filters */
 .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
 .toolbar input[type=search] { max-width: 260px; }
@@ -359,7 +403,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .item-list .signals li { border: 0; padding: 0; }
 .item-list .sum { font-weight: 600; white-space: nowrap; }
 .add-row { display: grid; grid-template-columns: 1fr 96px auto; gap: 8px; margin-top: 12px; }
-.add-row.deal { grid-template-columns: minmax(0, 1fr) 90px auto; }
+.add-row.deal { grid-template-columns: minmax(0, 1fr) 80px 140px auto; }
 .add-row .full { grid-column: 1 / -1; }
 
 .invite-box { margin-bottom: 20px; padding: 16px 18px; border-radius: var(--radius); background: var(--primary-soft); }
@@ -384,7 +428,11 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
          flex-direction: row; border-right: 0; border-top: 1px solid var(--line); z-index: 20; gap: 0; }
   .nav .brand, .nav-foot { display: none; }
   .nav-links { grid-auto-flow: column; grid-auto-columns: 1fr; width: 100%; gap: 0; }
-  .nav-links a { flex-direction: column; gap: 2px; padding: 8px 2px; font-size: 11px; justify-content: center; border-radius: 0; }
+  .nav-links a { flex-direction: column; gap: 2px; padding: 8px 0; font-size: 10px; justify-content: center; border-radius: 0; min-width: 0; }
+  .nav-links a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-links a span[data-short] { font-size: 0; }
+  .nav-links a span[data-short]::after { content: attr(data-short); font-size: 10px; }
+  .pf .pf-label { min-width: 170px; }
   .nav-links a[aria-current="page"] { background: none; }
   .mobile-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
                 background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }

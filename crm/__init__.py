@@ -49,7 +49,8 @@ def create_app(test_config=None):
     from . import util as U
     app.jinja_env.globals.update(
         C=C, csrf_token=auth.csrf_token, plural=U.plural, today=U.today, version=__version__,
-        WEEKDAYS=U.WEEKDAYS, safe_next=U.safe_next)
+        WEEKDAYS=U.WEEKDAYS, safe_next=U.safe_next,
+        month_name=lambda d: f"{U.MONTHS_NOM[d.month - 1].capitalize()} {d.year}")
     app.jinja_env.filters.update(
         d=U.fmt_date, num=U.fmt_num, eur=U.fmt_eur, label=lambda k, opts: C.label(opts, k),
         age=U.age_from,

@@ -18,6 +18,7 @@
   ('main.dashboard', 'Сегодня', 'today', ['main.dashboard']),
   ('main.contacts', 'Marktpotenzial', 'contacts', ['main.contacts', 'main.contact', 'main.contact_new']),
   ('main.planner', 'Планер', 'planner', ['main.planner', 'main.meeting_new', 'main.meeting_edit']),
+  ('main.plan', 'План/факт', 'target', ['main.plan', 'main.plan_edit']),
   ('main.team', 'Команда', 'team', ['main.team', 'main.person', 'main.person_new', 'main.person_edit']),
   ('main.stats', 'Статистика', 'stats', ['main.stats']),
 ] %}
@@ -34,7 +35,7 @@
     <a class="brand" href="{{ url_for('main.dashboard') }}"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span>Partner CRM</a>
     <nav class="nav-links" aria-label="Разделы">
       {% for endpoint, title, ic, group in nav %}
-      <a href="{{ url_for(endpoint) }}"{% if ep in group %} aria-current="page"{% endif %}>{{ icon(ic) }}<span>{{ title }}</span></a>
+      <a href="{{ url_for(endpoint) }}"{% if ep in group %} aria-current="page"{% endif %}>{{ icon(ic) }}<span{% if title == 'Marktpotenzial' %} data-short="Контакты"{% endif %}>{{ title }}</span></a>
       {% endfor %}
     </nav>
     <div class="nav-foot">

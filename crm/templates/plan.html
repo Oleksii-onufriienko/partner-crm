@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, person_select with context %}
+{% block title %}План и факт{% endblock %}
+{% macro n(x, ke=false) -%}{% if x is none %}<span class="muted">—</span>{% else %}{{ x|num(1 if ke else 0) }}{% endif %}{%- endmacro %}
+{% block content %}
+{% set is_me = p['id'] == g.user['id'] %}
+{% set mkey = month.strftime('%Y-%m') %}
+<header class="page-head">
+  <div>
+    <h1>План и факт{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <p class="sub">{{ month_name(month) }}{% if scope == 'team' %}, вся структура ({{ branch_size }} {{ plural(branch_size, 'человек', 'человека', 'человек') }}){% endif %}. Недели с понедельника, как в Erfolgsjournal.</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('main.plan', person=p['id'], month=prev.strftime('%Y-%m'), scope=scope) }}" aria-label="Прошлый месяц">{{ icon('chev-l') }}</a>
+    <a class="btn" href="{{ url_for('main.plan', person=p['id'], scope=scope) }}">Этот месяц</a>
+    <a class="btn ghost" href="{{ url_for('main.plan', person=p['id'], month=next.strftime('%Y-%m'), scope=scope) }}" aria-label="Следующий месяц">{{ icon('chev-r') }}</a>
+    {% if scope == 'me' %}<a class="btn primary" href="{{ url_for('main.plan_edit', person=p['id'], month=mkey) }}">{{ icon('edit') }}Заполнить план и факт</a>{% endif %}
+  </div>
+</header>
+
+<form class="toolbar" method="get">
+  {% if options|length > 1 %}{{ person_select('person', options, p['id'], attrs='data-autosubmit aria-label="Чей план"') }}{% endif %}
+  <input type="hidden" name="month" value="{{ mkey }}">
+  <input type="hidden" name="scope" value="{{ scope }}">
+  <noscript><button class="btn">Показать</button></noscript>
+  {% if branch_size > 1 %}
+  <span class="grow"></span>
+  <nav class="tabs" aria-label="Чьи цифры">
+    <a href="{{ url_for('main.plan', person=p['id'], month=mkey, scope='me') }}"{% if scope == 'me' %} aria-current="true"{% endif %}>Лично</a>
+    <a href="{{ url_for('main.plan', person=p['id'], month=mkey, scope='team') }}"{% if scope == 'team' %} aria-current="true"{% endif %}>Вся структура</a>
+  </nav>
+  {% endif %}
+</form>
+
+<dl class="kpis" aria-label="Итог месяца">
+  {% for s in v.summary %}
+  <div><dt>{{ s.label }}</dt>
+    <dd>{{ (s.ist or 0)|num(1 if s.key == 'ke' else 0) }} <small>{% if s.soll is not none %}из {{ s.soll|num(1 if s.key == 'ke' else 0) }}{% else %}без плана{% endif %}</small></dd>
+    <span class="sub">{% if s.key == 'ke' %}{{ eur.ist|eur }}{% if eur.soll %} из {{ eur.soll|eur }}{% endif %}{% elif s.pct is not none %}{{ s.pct }}% плана{% else %}&nbsp;{% endif %}</span>
+    {% if s.pct is not none %}<span class="meter" role="presentation"><i style="--w: {{ [s.pct, 100]|min }}%"{% if s.pct >= 100 %} class="full"{% endif %}></i></span>{% endif %}
+  </div>
+  {% endfor %}
+</dl>
+
+<section class="panel flush">
+  <div class="table-wrap">
+  <table class="table pf">
+    <thead>
+      <tr>
+        <th rowspan="2" class="pf-label">Показатель</th>
+        {% for w in weeks %}<th colspan="2" class="pf-week{{ ' now' if v.week_state[loop.index0] == 'current' }}">Неделя {{ loop.index }}<span class="sub">{{ week_label(w) }}</span></th>{% endfor %}
+        <th colspan="3" class="pf-week pf-total">Месяц</th>
+      </tr>
+      <tr>
+        {% for w in weeks %}<th class="num pf-s{{ ' now' if v.week_state[loop.index0] == 'current' }}">План</th><th class="num{{ ' now' if v.week_state[loop.index0] == 'current' }}">Факт</th>{% endfor %}
+        <th class="num pf-s pf-total">План</th><th class="num pf-total">Факт</th><th class="num pf-total">%</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for b in v.blocks %}
+      <tr class="pf-block"><td colspan="{{ weeks|length * 2 + 4 }}">{{ b.label }}</td></tr>
+      {% for r in b.rows %}
+      <tr>
+        <td class="pf-label">{{ r.label }}{% if r.auto %} <span class="auto-tag" title="Факт считается сам из встреч и сделок">авто</span>{% endif %}<span class="sub">{{ r.de }}</span></td>
+        {% for c in r.cells %}
+        <td class="num pf-s{{ ' now' if c.state == 'current' }}">{{ n(c.soll, r.is_ke) }}</td>
+        <td class="num pf-i {{ c.mark }}{{ ' now' if c.state == 'current' }}{{ ' future' if c.state == 'future' }}">{% if c.state == 'future' and not c.ist %}<span class="muted">·</span>{% else %}<span{% if c.manual and r.auto %} class="manual" title="Исправлено вручную, авто: {{ c.auto|num(1) }}"{% endif %}>{{ n(c.ist, r.is_ke) }}</span>{% endif %}</td>
+        {% endfor %}
+        <td class="num pf-s pf-total">{{ n(r.total.soll, r.is_ke) }}</td>
+        <td class="num pf-i pf-total{% if r.total.pct is not none %}{{ ' hit' if r.total.pct >= 100 }}{% endif %}">{{ n(r.total.ist, r.is_ke) }}</td>
+        <td class="num pf-total">{{ (r.total.pct ~ '%') if r.total.pct is not none else '' }}</td>
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+<p class="foot-note">«Авто» — факт считается сам из встреч в планере и сделок. Остальное вносится вручную кнопкой «Заполнить план и факт». Зелёный факт — план недели выполнен, красный — неделя прошла, план не выполнен.</p>
+
+{% if partners %}
+<section class="panel flush" style="margin-top: 20px">
+  <div class="panel-head"><h2>По партнёрам</h2><span class="muted small">факт / план за месяц, каждый вместе со своей веткой</span></div>
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Партнёр</th>{% for key, label in C.PLAN_SUMMARY %}<th class="num">{{ label }}</th>{% endfor %}</tr></thead>
+    <tbody>{% for x in partners %}
+      <tr><td><a class="row-link" href="{{ url_for('main.plan', person=x.p['id'], month=mkey, scope='team' if x.size > 1 and not x.own else 'me') }}">{{ x.p|fullname }}</a>
+        <span class="sub">{{ 'лично' if x.own else x.p['stufe'] ~ (', ветка ' ~ x.size if x.size > 1 else '') }}</span></td>
+        {% for c in x.cells %}<td class="num nowrap{% if c.pct is not none %}{{ ' hit' if c.pct >= 100 else (' miss' if c.pct < 50 else '') }}{% endif %}">{{ (c.ist or 0)|num(1 if loop.last else 0) }}<span class="muted"> / {{ c.soll|num(1 if loop.last else 0) if c.soll is not none else 'нет плана' }}</span></td>{% endfor %}
+      </tr>
+    {% endfor %}</tbody>
+  </table></div>
+</section>
+<p class="foot-note">Зелёным — план месяца выполнен, красным — выполнено меньше половины.</p>
+{% endif %}
+
+<section class="panel" style="margin-top: 20px">
+  <div class="panel-head"><h2>Квоты месяца</h2><span class="muted small">по факту, как Quoten-Auswertung в Erfolgsjournal</span></div>
+  <ul class="quotas">
+    {% for label, val in quotas %}
+    <li><b>{{ val|num(1) if val is not none else '—' }}</b><span>{{ label }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

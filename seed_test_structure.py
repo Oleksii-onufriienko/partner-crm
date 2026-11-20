@@ -2,22 +2,36 @@
 
     python seed_test_structure.py add    ПУТЬ/К/crm.sqlite3
     python seed_test_structure.py remove ПУТЬ/К/crm.sqlite3
+    python seed_test_structure.py plan   ПУТЬ/К/crm.sqlite3
 
 add    — добавляет под первого администратора: 3 VBA, 1 AL (у него ещё 1 VBA) и 10 VM,
          у каждого — до 10 контактов, потенциальные сделки, встречи и немного сделок.
+         и план/факт по неделям на прошлый, текущий и следующий месяц.
 remove — удаляет всех тестовых людей (помечены «[ТЕСТ]» в заметке) со всеми их данными.
+plan   — заново заполняет план/факт по неделям у уже добавленных тестовых людей.
 Телефоны вымышленные (+49 000 …). Кабинетов (паролей) у тестовых людей нет.
 """
 import datetime as dt
+import os
 import random
 import sqlite3
 import sys
 
 MARK = "[ТЕСТ]"
 
-if len(sys.argv) != 3 or sys.argv[1] not in ("add", "remove"):
+if len(sys.argv) != 3 or sys.argv[1] not in ("add", "remove", "plan"):
     sys.exit(__doc__)
-cmd, path = sys.argv[1], sys.argv[2]
+cmd, path = sys.argv[1], os.path.abspath(os.path.expanduser(sys.argv[2]))
+if not os.path.exists(path):
+    sys.exit(f"Базы {path} нет.")
+
+# Приводим схему базы к текущей версии (новые таблицы и колонки)
+os.environ["CRM_DB"] = path
+os.environ.setdefault("CRM_INSTANCE", os.path.dirname(path))
+from crm import create_app  # noqa: E402
+from crm.demo import add_week_plans  # noqa: E402
+
+create_app()
 db = sqlite3.connect(path)
 db.execute("PRAGMA foreign_keys = ON")
 
@@ -44,6 +58,23 @@ if cmd == "remove":
         db.executemany("DELETE FROM persons WHERE id = ?", [(i,) for i in leaves])
     db.commit()
     print(f"Удалено тестовых людей: {len(ids)}")
+    sys.exit()
+
+if cmd == "plan":
+    ids = test_ids()
+    if not ids:
+        sys.exit("Тестовых людей нет. Сначала: python seed_test_structure.py add " + path)
+    rnd = random.Random(7)
+    marks = ",".join("?" * len(ids))
+    db.execute(f"DELETE FROM week_plan WHERE person_id IN ({marks})", ids)
+    n = 0
+    for pid, stufe in db.execute(f"SELECT id, stufe FROM persons WHERE id IN ({marks}) ORDER BY id", ids).fetchall():
+        if stufe == "VM" and rnd.random() < 0.2:
+            continue                       # у пары VM плана нет — так видно сигнал
+        add_week_plans(db, pid, rnd, scale=0.5 if stufe == "VM" else 1.0)
+        n += 1
+    db.commit()
+    print(f"План/факт по неделям заполнен у {n} тестовых людей.")
     sys.exit()
 
 if test_ids():
@@ -132,9 +163,10 @@ for pid in [vba1, vba2, vba3, al, vba4] + vms:
             db.execute("INSERT INTO potentials (contact_id, product, ke) VALUES (?, ?, ?)",
                        (cid, rnd.choice(PRODUCTS), rnd.choice([5, 8, 10, 15, 20, 30, 40])))
         if kind == "client":
-            db.execute("INSERT INTO deals (contact_id, date, product, ke) VALUES (?, ?, ?, ?)",
-                       ((cid), (today - dt.timedelta(days=rnd.randint(0, 45))).isoformat(),
-                        rnd.choice(PRODUCTS), rnd.choice([6, 10, 14, 18, 25, 32])))
+            db.execute("INSERT INTO deals (contact_id, date, product, ke, source) VALUES (?, ?, ?, ?, ?)",
+                       (cid, (today - dt.timedelta(days=rnd.randint(0, 45))).isoformat(),
+                        rnd.choice(PRODUCTS), rnd.choice([6, 10, 14, 18, 25, 32]),
+                        "service" if rnd.random() < 0.25 else "consult"))
             counts["deals"] += 1
     if not activity:
         continue
@@ -145,15 +177,21 @@ for pid in [vba1, vba2, vba3, al, vba4] + vms:
             status = ("done" if rnd.random() < 0.8 else "cancelled") if day < today else "planned"
             db.execute(
                 """INSERT INTO meetings (owner_id, contact_id, date, time, duration_min, format, stage,
-                                         status, expected_ke, created_by)
-                   VALUES (?, ?, ?, ?, 60, ?, ?, ?, ?, ?)""",
+                                         status, expected_ke, created_by, created_at)
+                   VALUES (?, ?, ?, ?, 60, ?, ?, ?, ?, ?, ?)""",
                 (pid, rnd.choice(contact_ids), day.isoformat(),
                  f"{rnd.choice([10, 11, 14, 16, 17, 18, 19]):02d}:{rnd.choice(['00', '30'])}",
                  "call" if stage == "contact" else rnd.choice(["offline", "offline", "online", "call"]),
                  stage, status, rnd.choice([10, 15, 20, 30]) if stage in ("consult", "closing") else None,
-                 admin[0] if rnd.random() < 0.3 else pid))
+                 admin[0] if rnd.random() < 0.3 else pid,
+                 min(day - dt.timedelta(days=rnd.randint(2, 10)), today).isoformat() + " 12:00:00"))
             counts["meetings"] += 1
         day += dt.timedelta(days=1)
+
+for pid in [vba1, vba2, vba3, al, vba4] + vms:
+    if pid in vms and rnd.random() < 0.2:
+        continue
+    add_week_plans(db, pid, rnd, scale=0.5 if pid in vms else 1.0, today=today)
 
 db.commit()
 print(f"Добавлено под «{admin[1]} {admin[2]}»: 15 человек (3 VBA, 1 AL с 1 VBA, 10 VM), "

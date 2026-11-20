@@ -57,6 +57,23 @@
 
   <div>
     <section class="panel">
+      <div class="panel-head"><h2>Эта неделя: план и факт</h2><a href="{{ url_for('main.plan') }}">План/факт</a></div>
+      {% if has_week_plan %}
+      <div class="week-plan">
+        {% for s in week_summary %}
+        <div class="wp-row">
+          <span class="ink-2">{{ s.label }}</span>
+          <span><b>{{ (s.ist or 0)|num(1 if s.key == 'ke' else 0) }}</b> <span class="muted">из {{ s.soll|num(1 if s.key == 'ke' else 0) if s.soll is not none else '—' }}</span></span>
+          {% if s.pct is not none %}<span class="meter" role="presentation"><i style="--w: {{ [s.pct, 100]|min }}%"{% if s.pct >= 100 %} class="full"{% endif %}></i></span>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">План на эту неделю не заполнен. <a href="{{ url_for('main.plan_edit') }}">Заполнить план</a>: сколько первых терминов, бератунгов и KE вы хотите сделать.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
       <div class="panel-head"><h2>Кому позвонить</h2><a href="{{ url_for('main.contacts', sort='next') }}">Все напоминания</a></div>
       {% if followups %}
       <ul class="item-list">

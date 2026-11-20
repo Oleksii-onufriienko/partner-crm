@@ -35,7 +35,7 @@
   <div><dt>Marktpotenzial</dt><dd>{{ s.contacts|num }}</dd><span class="sub">+{{ s.new_contacts }} новых, {{ s.clients }} {{ plural(s.clients, 'клиент', 'клиента', 'клиентов') }}</span></div>
   <div><dt>Клиентский потенциал</dt><dd>{{ s.potential_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_potential|eur }}</span></div>
   <div><dt>Встречи проведены</dt><dd>{{ s.done }} <small>из {{ s.planned }}</small></dd><span class="sub">{% set r = rate(s.done, s.planned) %}{{ (r ~ '% от плана') if r is not none else 'нет плана' }}{% if s.cancelled %}, {{ s.cancelled }} отменено{% endif %}</span></div>
-  <div><dt>Результат по плану</dt><dd>{{ s.expected_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_expected|eur }}</span></div>
+  <div><dt>Ожидается по встречам</dt><dd>{{ s.expected_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_expected|eur }}</span></div>
   <div><dt>Результат факт</dt><dd>{{ s.deal_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_deals|eur }}, {{ s.deals }} {{ plural(s.deals, 'сделка', 'сделки', 'сделок') }}</span></div>
 </dl>
 {% if s.coef_missing %}<div class="flashes"><div class="flash error">У {{ s.coef_missing }} {{ plural(s.coef_missing, 'человека', 'человек', 'человек') }} не указан коэффициент €/KE — их KE не попали в суммы в €.</div></div>{% endif %}
@@ -68,7 +68,7 @@
   <table class="table">
     <thead><tr>
       <th>Партнёр</th><th class="num hide-m">Людей</th><th class="num hide-m">Контакты</th><th class="num">Потенциал, KE</th>
-      <th class="num">Встречи</th><th class="num hide-m">%</th><th class="num">План, KE</th><th class="num">Факт, KE</th><th class="num">Факт, €</th>
+      <th class="num">Встречи</th><th class="num hide-m">%</th><th class="num">Ожидается, KE</th><th class="num">Факт, KE</th><th class="num">Факт, €</th>
     </tr></thead>
     <tbody>
       <tr>

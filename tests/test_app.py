@@ -58,14 +58,17 @@ class PagesTest(Base):
                     "/stats?period=custom&from=2026-01-01&to=2026-12-31", "/stats?period=next6w",
                     "/account", "/people/new", f"/people/{self.pid('Ланге')}", f"/people/{self.pid('Ланге')}/edit",
                     f"/contacts/{self.first_contact(self.pid('Ланге'))}", f"/planner?person={self.pid('Ланге')}",
-                    f"/stats?person={self.pid('Ланге')}&scope=team"]:
+                    f"/stats?person={self.pid('Ланге')}&scope=team", "/plan", "/plan?scope=team",
+                    "/plan/edit", "/plan?month=2026-01", f"/plan?person={self.pid('Ланге')}&scope=team",
+                    f"/plan/edit?person={self.pid('Кох')}&month=2030-02"]:
             r = c.get(url)
             self.assertEqual(r.status_code, 200, url)
             self.assertNotIn(b"Traceback", r.data)
 
     def test_pages_render_for_vm_without_team(self):
         c = self.client_for("oleg@demo.local")
-        for url in ["/", "/team", "/contacts", "/planner", "/stats", "/account", "/meetings/new", "/contacts/new"]:
+        for url in ["/", "/team", "/contacts", "/planner", "/stats", "/account", "/meetings/new", "/contacts/new",
+                    "/plan", "/plan/edit", "/plan?scope=team"]:
             self.assertEqual(c.get(url).status_code, 200, url)
 
     def test_unauthenticated_redirects_to_login(self):
@@ -87,6 +90,8 @@ class AccessTest(Base):
             self.assertEqual(c.get(f"/contacts?person={self.pid(name)}").status_code, 404, name)
             self.assertEqual(c.get(f"/planner?person={self.pid(name)}").status_code, 404, name)
             self.assertEqual(c.get(f"/stats?person={self.pid(name)}").status_code, 404, name)
+            self.assertEqual(c.get(f"/plan?person={self.pid(name)}").status_code, 404, name)
+            self.assertEqual(c.get(f"/plan/edit?person={self.pid(name)}").status_code, 404, name)
             cid = self.first_contact(self.pid(name))
             self.assertEqual(c.get(f"/contacts/{cid}").status_code, 404, name)
 
@@ -179,6 +184,87 @@ class FlowTest(Base):
         page = c.get("/stats?scope=team").data.decode()
         self.assertIn("Слабые места", page)
         self.assertIn("Пустой план", page)   # у Павла и Олега нет встреч
+
+
+
+class PlanTest(Base):
+    def test_auto_and_manual_facts(self):
+        import sqlite3
+        c = self.client_for("oleg@demo.local")
+        me = self.pid("Майер")
+        db = sqlite3.connect(self.db)
+        c.post("/contacts", data={"csrf_token": self.csrf(c), "person": me, "first_name": "План", "last_name": "Тест"})
+        cid = db.execute("SELECT id FROM contacts WHERE first_name='План' AND owner_id=?", (me,)).fetchone()[0]
+        c.post("/meetings/new", data={"csrf_token": self.csrf(c), "owner_id": me, "contact_id": cid,
+                                      "date": "2030-01-08", "format": "offline", "stage": "first", "status": "done"})
+        c.post(f"/contacts/{cid}/deals", data={"csrf_token": self.csrf(c), "date": "2030-01-09",
+                                               "product": "BU", "ke": "10", "source": "service"})
+        r = c.post("/plan/edit?month=2030-01", data={"csrf_token": self.csrf(c),
+                                                     "s_fa_held_2030-01-07": "3", "i_fa_referrals_2030-01-07": "5",
+                                                     "i_fa_held_2030-01-14": "2"})
+        self.assertEqual(r.status_code, 302)
+        with self.app.app_context():
+            from crm import plan as P
+            weeks = P.month_weeks(2030, 1)
+            self.assertEqual([w.day for w in weeks], [7, 14, 21, 28])
+            g = P.grids([me], weeks)[me]
+            w1, w2 = g["2030-01-07"], g["2030-01-14"]
+            self.assertEqual((w1["fa_held"]["soll"], w1["fa_held"]["ist"]), (3, 1))   # авто из встречи
+            self.assertEqual(w1["fa_referrals"]["ist"], 5)                              # вручную
+            self.assertEqual(w1["st_ke"]["ist"], 10)                                    # сделка из сервиса
+            self.assertEqual(w1["br_clients"]["ist"], 1)                                # первая сделка
+            self.assertTrue(w2["fa_held"]["manual"])
+            self.assertEqual(w2["fa_held"]["ist"], 2)                                   # поправка вручную
+        page = c.get("/plan?month=2030-01").data.decode()
+        self.assertIn("Проведено первых терминов", page)
+
+    def test_copy_previous_month(self):
+        c = self.client_for("anna@demo.local")
+        me = self.pid("Фишер")
+        c.post("/plan/edit?month=2029-12", data={"csrf_token": self.csrf(c), "s_br_ke_2029-12-31": "40"})
+        c.post("/plan/copy?month=2030-01", data={"csrf_token": self.csrf(c)})
+        with self.app.app_context():
+            from crm import plan as P
+            weeks = P.month_weeks(2030, 1)
+            g = P.grids([me], weeks)[me]
+            self.assertEqual([g[w.isoformat()]["br_ke"]["soll"] for w in weeks], [40, 40, 40, 40])
+
+    def test_team_scope_sums_branch(self):
+        c = self.client_for("irina@demo.local")
+        for name, val in (("Кох", "4"), ("Вебер", "6")):
+            c.post(f"/plan/edit?person={self.pid(name)}&month=2030-03",
+                   data={"csrf_token": self.csrf(c), "s_br_held_2030-03-04": val})
+        with self.app.app_context():
+            from crm import plan as P
+            weeks = P.month_weeks(2030, 3)
+            ids = [self.pid("Кох"), self.pid("Вебер")]
+            total = P.month_totals(P.combine(P.grids(ids, weeks).values(), weeks), weeks)
+            self.assertEqual(total["br_held"]["soll"], 10)
+
+
+class MigrationTest(unittest.TestCase):
+    def test_old_database_gets_new_columns(self):
+        import sqlite3
+        tmp = tempfile.mkdtemp()
+        path = os.path.join(tmp, "old.sqlite3")
+        db = sqlite3.connect(path)
+        db.execute("CREATE TABLE deals (id INTEGER PRIMARY KEY, contact_id INTEGER, date TEXT, product TEXT, ke REAL, note TEXT, created_at TEXT)")
+        db.commit()
+        db.close()
+        old_db, old_inst = os.environ.get("CRM_DB"), os.environ.get("CRM_INSTANCE")
+        os.environ["CRM_DB"], os.environ["CRM_INSTANCE"] = path, os.path.join(tmp, "inst")
+        try:
+            from crm import create_app
+            create_app()
+            cols = [r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(deals)")]
+            self.assertIn("source", cols)
+        finally:
+            for k, v in (("CRM_DB", old_db), ("CRM_INSTANCE", old_inst)):
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 if __name__ == "__main__":

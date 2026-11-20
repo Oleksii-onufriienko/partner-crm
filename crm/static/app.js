@@ -72,6 +72,14 @@
     });
   }
 
+  // План: «Для всех недель» → во все недели строки
+  document.querySelectorAll("[data-fill-row]").forEach(function (inp) {
+    inp.addEventListener("input", function () {
+      var row = inp.closest("tr");
+      row.querySelectorAll("input.s-in").forEach(function (cell) { cell.value = inp.value; });
+    });
+  });
+
   // Потенциальная сделка → «оформить»: переносим данные в форму сделки
   document.querySelectorAll("[data-to-deal]").forEach(function (btn) {
     btn.addEventListener("click", function () {

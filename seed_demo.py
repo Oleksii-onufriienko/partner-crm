@@ -103,8 +103,9 @@ for pid, (n, _) in profiles.items():
         if kind == "client":
             for _ in range(rnd.choice([1, 1, 2])):
                 d = today - dt.timedelta(days=rnd.randint(0, 80))
-                db.execute("INSERT INTO deals (contact_id, date, product, ke) VALUES (?, ?, ?, ?)",
-                           (cid, d.isoformat(), rnd.choice(PRODUCTS), rnd.choice([6, 10, 14, 18, 25, 32, 45])))
+                db.execute("INSERT INTO deals (contact_id, date, product, ke, source) VALUES (?, ?, ?, ?, ?)",
+                           (cid, d.isoformat(), rnd.choice(PRODUCTS), rnd.choice([6, 10, 14, 18, 25, 32, 45]),
+                            "service" if rnd.random() < 0.25 else "consult"))
 
 STAGE_FLOW = ["contact", "first", "first", "analysis", "consult", "consult", "closing", "service",
               "seminar", "recruiting", "advocate", "cold"]
@@ -125,12 +126,13 @@ for pid, (_, per_week) in profiles.items():
                 exp = rnd.choice([10, 15, 20, 30, 40]) if stage in ("consult", "closing") else None
                 db.execute(
                     """INSERT INTO meetings (owner_id, contact_id, date, time, duration_min, format, stage,
-                                             status, expected_ke, created_by)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                                             status, expected_ke, created_by, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (pid, rnd.choice(contacts[pid]), day.isoformat(),
                      f"{rnd.choice([9, 10, 11, 13, 15, 17, 18, 19]):02d}:{rnd.choice(['00', '30'])}",
                      rnd.choice([30, 60, 90]), fmt, stage, status, exp,
-                     viktor if rnd.random() < 0.3 else pid))
+                     viktor if rnd.random() < 0.3 else pid,
+                     min(day - dt.timedelta(days=rnd.randint(2, 10)), today).isoformat() + " 12:00:00"))
         if day.weekday() == 1 and day >= today - dt.timedelta(days=7):   # тим-митинг по вторникам
             db.execute("""INSERT INTO meetings (owner_id, title, date, time, format, stage, status, created_by)
                           VALUES (?, 'Тим-митинг в офисе', ?, '19:00', 'offline', 'training', ?, ?)""",
@@ -140,6 +142,12 @@ for pid, (_, per_week) in profiles.items():
                           VALUES (?, 'Семья', ?, '10:00', 'private', 'other', 'planned', ?)""",
                        (pid, day.isoformat(), pid))
         day += dt.timedelta(days=1)
+
+from crm.demo import add_week_plans  # noqa: E402
+
+for pid, (_, per_week) in profiles.items():
+    if per_week:
+        add_week_plans(db, pid, rnd, scale=1.0 if pid in (viktor, irina, dmitri) else 0.5, today=today)
 
 db.commit()
 print(f"Демо-база создана: {path}")

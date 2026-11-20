@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS deals (
     product     TEXT NOT NULL,
     ke          REAL NOT NULL DEFAULT 0,
     note        TEXT,
+    source      TEXT NOT NULL DEFAULT 'consult',     -- consult = бератунг, service = сервис-термин
     created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS ix_deals_contact ON deals(contact_id);
@@ -95,7 +96,25 @@ CREATE TABLE IF NOT EXISTS meetings (
 );
 CREATE INDEX IF NOT EXISTS ix_meetings_owner_date ON meetings(owner_id, date);
 CREATE INDEX IF NOT EXISTS ix_meetings_contact ON meetings(contact_id);
+
+-- План (Soll) и ручной факт (Ist) по неделям. week = понедельник недели.
+-- ist = NULL: для автоматических показателей факт считается из встреч и сделок.
+CREATE TABLE IF NOT EXISTS week_plan (
+    person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    week        TEXT NOT NULL,
+    metric      TEXT NOT NULL,
+    soll        REAL,
+    ist         REAL,
+    updated_by  INTEGER,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (person_id, week, metric)
+);
 """
+
+# Изменения схемы для уже существующих баз: (таблица, колонка, определение)
+MIGRATIONS = [
+    ("deals", "source", "TEXT NOT NULL DEFAULT 'consult'"),
+]
 
 
 def get_db():
@@ -130,6 +149,10 @@ def init_db():
     db = get_db()
     db.execute("PRAGMA journal_mode = WAL")
     db.executescript(SCHEMA)
+    for table, column, definition in MIGRATIONS:
+        cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
+        if column not in cols:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
     db.commit()
 
 
