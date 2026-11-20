@@ -185,7 +185,8 @@ class FlowTest(Base):
         self.assertIn("Слабые места", page)
         self.assertIn("Пустой план", page)   # у Павла и Олега нет встреч
         self.assertIn("меньше минимума (20)", page)
-        self.assertIn("Виктор Берг ›", page)   # иерархия над именем в «Слабых местах»
+        self.assertIn('class="crumb-path"', page)   # иерархия над именем в «Слабых местах»
+        self.assertIn("<li style=\"--lvl: 0\">Виктор Берг</li>", page)
 
 
 

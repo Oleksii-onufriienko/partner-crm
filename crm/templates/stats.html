@@ -127,7 +127,7 @@
     {% for who, sigs, path in weak %}
     <li class="weak-row">
       <div class="weak-who">
-        {% if path %}<span class="crumb-path" title="Структура выше: {{ path|map('fullname')|join(' › ') }}">{% for a in path %}{{ a|fullname }}{% if not loop.last %} › {% endif %}{% endfor %} ›</span>{% else %}<span class="crumb-path">лично</span>{% endif %}
+        {% if path %}<ol class="crumb-path" aria-label="Структура выше">{% for a in path %}<li style="--lvl: {{ loop.index0 }}">{{ a|fullname }}</li>{% endfor %}</ol>{% else %}<span class="crumb-path">лично</span>{% endif %}
         <a class="row-link" href="{{ url_for('main.person', pid=who['id']) }}">{{ who|fullname }}</a>
         <span class="muted small">{{ who['stufe'] }}</span>
       </div>

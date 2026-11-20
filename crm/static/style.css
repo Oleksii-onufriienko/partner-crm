@@ -284,10 +284,16 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .signals li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn);
                       flex: none; transform: translateY(-1px); }
 .signals.none li::before { background: var(--primary); }
-.weak-row { align-items: flex-start !important; }
-.weak-who { display: grid; gap: 1px; min-width: 240px; max-width: 320px; }
-.crumb-path { font-size: 12px; color: var(--muted); line-height: 1.35; }
-@media (max-width: 860px) { .weak-row { flex-direction: column; gap: 6px !important; } .weak-who { min-width: 0; } }
+/* «Слабые места»: слева колонка фиксированной ширины, бетроеры выше — столбиком */
+.item-list li.weak-row { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 4px 24px; align-items: start; }
+.weak-who { display: grid; gap: 1px; min-width: 0; }
+.weak-who .row-link { overflow-wrap: anywhere; }
+.crumb-path { margin: 0 0 2px; padding: 0; list-style: none; font-size: 12px; color: var(--muted); line-height: 1.45; }
+.item-list .crumb-path li { display: block; padding: 0 0 0 calc(var(--lvl, 0) * 10px); border: 0; font-size: 12px;
+                            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crumb-path li::after { content: " ›"; }
+.weak-row .signals { padding-top: 2px; }
+@media (max-width: 860px) { .item-list li.weak-row { grid-template-columns: 1fr; } }
 
 /* ------------------------------------------------------------ Kontaktpyramide */
 .pyramid { display: grid; gap: 6px; }
