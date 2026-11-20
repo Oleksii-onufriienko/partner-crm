@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, temp, progress, status_chip with context %}
+{% block title %}Обзвон{% endblock %}
+{% block content %}
+{% set here = request.full_path %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.contacts', person=p['id']) }}">Marktpotenzial</a></p>
+    <h1>Обзвон</h1>
+    <p class="sub">Один человек на экране: звоните и отмечайте результат. Статус, напоминание и термин в планере ставятся сами, разговоры попадают в план и факт недели.</p>
+  </div>
+</header>
+
+<div class="calls-layout">
+  <div>
+    <nav class="tabs" aria-label="Кому звонить">
+      {% for key, name in modes %}<a href="{{ url_for('main.calls', person=p['id'], mode=key) }}"{% if key == mode %} aria-current="true"{% endif %}>{{ name }} <span class="muted">{{ counts[key] }}</span></a>{% endfor %}
+    </nav>
+
+    {% if current %}
+    {% set c = current %}
+    <article class="panel call-card" aria-labelledby="call-name">
+      <div class="cc-head">
+        <div>
+          <h2 id="call-name">{{ temp(c['temperature'], short=true) }}<a href="{{ url_for('main.contact', cid=c['id']) }}">{{ c['first_name'] }} {{ c['last_name'] or '' }}</a></h2>
+          <p class="cc-meta">{{ c['temperature']|label(C.TEMPERATURES) }}{% if c['profession'] %}, {{ c['profession'] }}{% endif %}{% if c['age'] %}, {{ c['age'] }} {{ plural(c['age'], 'год', 'года', 'лет') }}{% endif %}{% if c['recommended_by'] %}, от {{ c['recommended_by'] }}{% endif %}</p>
+        </div>
+        {{ status_chip(c['status']) }}
+      </div>
+      {% if c['phone'] %}<a class="btn primary call-btn" href="tel:{{ c['phone']|replace(' ', '') }}">{{ icon('phone') }}{{ c['phone'] }}</a>
+      {% else %}<p class="warn-text">Телефона нет — <a href="{{ url_for('main.contact', cid=c['id']) }}">добавить в карточке</a>.</p>{% endif %}
+      <dl class="cc-facts">
+        {% if c['next_action'] or c['next_action_date'] %}<div><dt>Напоминание</dt><dd>{{ c['next_action'] or 'Связаться' }}{% if c['next_action_date'] %}, {{ c['next_action_date']|d('dmy') }}{% endif %}</dd></div>{% endif %}
+        <div><dt>Звонков раньше</dt><dd>{{ c['calls_n'] }}{% if c['last_call'] %}, последний {{ c['last_call']|d('dmy') }}{% endif %}</dd></div>
+        {% if c['pot'] %}<div><dt>Потенциал</dt><dd>{{ c['pot']|num(0) }} KE</dd></div>{% endif %}
+        {% if meetings %}<div><dt>Встречи</dt><dd>{% for m in meetings %}{{ m['date']|d('short') }} {{ m['stage']|stage_short }}{{ ', ' if not loop.last }}{% endfor %}</dd></div>{% endif %}
+      </dl>
+      {% if c['comment'] %}<p class="cc-comment">{{ c['comment'][-300:] }}</p>{% endif %}
+
+      <form method="post" action="{{ url_for('main.call_result', cid=c['id']) }}" class="cc-actions" id="call-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ url_for('main.calls', person=p['id'], mode=mode) }}">
+        <label class="field cc-note"><span class="field-label">Заметка к звонку (по желанию)</span><input type="text" name="comment" maxlength="500"></label>
+        <div class="cc-buttons">
+          <button class="btn" name="result" value="no_answer">Не дозвонился</button>
+          <button class="btn" name="result" value="no_chance">Нет шансов</button>
+        </div>
+        <details class="cc-more" open>
+          <summary>Договорились о термине</summary>
+          <div class="cc-row">
+            <label class="field"><span class="field-label">Дата</span><input type="date" name="date" value="{{ tomorrow.isoformat() }}"></label>
+            <label class="field"><span class="field-label">Время</span><input type="time" name="time"></label>
+            <label class="field grow"><span class="field-label">Что за встреча</span>
+              <select name="stage">{% for k in ['first', 'advocate', 'analysis', 'consult', 'service', 'recruiting'] %}<option value="{{ k }}">{{ k|label(C.STAGES) }}</option>{% endfor %}</select></label>
+            <label class="field"><span class="field-label">Формат</span>
+              <select name="format">{% for k, n in C.FORMATS if k != 'private' %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></label>
+            <button class="btn primary" name="result" value="appointment">Термин</button>
+          </div>
+        </details>
+        <details class="cc-more">
+          <summary>Попросил перезвонить</summary>
+          <div class="cc-row">
+            <label class="field"><span class="field-label">Когда</span><input type="date" name="callback_date" value="{{ in3.isoformat() }}"></label>
+            <label class="field grow"><span class="field-label">Что сделать</span><input type="text" name="note" maxlength="200" placeholder="Перезвонить"></label>
+            <button class="btn" name="result" value="callback">Перезвонить</button>
+          </div>
+        </details>
+      </form>
+      <p class="cc-skip"><a href="{{ url_for('main.calls', person=p['id'], mode=mode, skip=skip + 1) }}">Пропустить, позвоню позже</a></p>
+    </article>
+
+    {% if nxt %}
+    <section class="panel">
+      <div class="panel-head"><h2>Дальше по списку</h2><span class="muted small">ещё {{ queue|length - 1 }}</span></div>
+      <ul class="item-list">{% for n in nxt %}
+        <li>{{ temp(n['temperature'], short=true) }}<span class="grow">{{ n['first_name'] }} {{ n['last_name'] or '' }}{% if n['next_action_date'] %} <span class="muted small">— {{ n['next_action_date']|d('short') }}</span>{% endif %}</span><span class="muted small">{{ n['phone'] or 'нет телефона' }}</span></li>
+      {% endfor %}</ul>
+    </section>
+    {% endif %}
+    {% else %}
+    <section class="panel"><p class="empty">{% if mode == 'due' %}Напоминаний на сегодня больше нет.{% elif mode == 'new' %}Всем новым контактам уже звонили.{% else %}Звонить некому: всем позвонили сегодня или у всех «нет шансов».{% endif %}
+      {% if mode != 'all' and counts['all'] %} <a href="{{ url_for('main.calls', person=p['id'], mode='all') }}">Показать всех ({{ counts['all'] }})</a>{% endif %}
+      {% if not counts['all'] %} <a href="{{ url_for('main.contact_new', person=p['id']) }}">Добавить контакты в Marktpotenzial</a>{% endif %}</p></section>
+    {% endif %}
+  </div>
+
+  <aside>
+    <section class="panel day-goal">
+      <div class="panel-head"><h2>Сегодня</h2><span class="muted small">цель дня из Tages-Statistik</span></div>
+      <div class="dg-row"><span>Разговоров</span><b>{{ stats.reached }}</b><small>из {{ C.CALLS_PER_DAY }}</small></div>
+      {{ progress((100 * stats.reached / C.CALLS_PER_DAY)|round|int, stats.reached >= C.CALLS_PER_DAY, 'Разговоры') }}
+      <div class="dg-row"><span>Терминов</span><b>{{ stats.appointments }}</b><small>из {{ C.TERMINE_PER_DAY }}</small></div>
+      {{ progress((100 * stats.appointments / C.TERMINE_PER_DAY)|round|int, stats.appointments >= C.TERMINE_PER_DAY, 'Термины') }}
+      <p class="muted small" style="margin: 12px 0 0">Всего набрано номеров: {{ stats.total }}, не дозвонился: {{ stats.by.get('no_answer', 0) }}.</p>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><h2>Звонки сегодня</h2></div>
+      {% if log %}
+      <ul class="item-list call-log">{% for k in log %}
+        <li><span class="muted nowrap">{{ k['time'] or '' }}</span><span class="grow">{% if k['contact_id'] %}<a href="{{ url_for('main.contact', cid=k['contact_id']) }}">{{ k['first_name'] }} {{ k['last_name'] or '' }}</a>{% else %}—{% endif %}</span>
+          <span class="chip {{ 'ok' if k['result'] == 'appointment' else ('outline' if k['result'] == 'no_answer' else '') }}">{{ k['result']|label(C.CALL_RESULTS) }}</span></li>
+      {% endfor %}</ul>
+      {% else %}<p class="empty">Пока ни одного. Начните с первого человека слева.</p>{% endif %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

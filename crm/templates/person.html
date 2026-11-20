@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_ui.html' import icon, career_steps with context %}
+{% from '_ui.html' import icon, career_steps, progress with context %}
 {% block title %}{{ p|fullname }}{% endblock %}
 {% block content %}
 {% set is_me = p['id'] == g.user['id'] %}
@@ -47,6 +47,34 @@
       {{ career_steps(steps) }}
     </section>
 
+    <section class="panel" id="reflections">
+      <div class="panel-head"><h2>Reflexionsgespräche</h2><a href="{{ url_for('main.reflection', pid=p['id']) }}">Провести разговор</a></div>
+      {% if reflections %}
+      <ul class="item-list refl-list">
+        {% for r in reflections %}
+        <li><span class="muted nowrap">{{ r['date']|d('dmy') }}</span>
+          <span class="grow"><a class="row-link" href="{{ url_for('main.reflection', pid=p['id'], rid=r['id']) }}">{{ [r['goal1'], r['goal2'], r['goal3']]|select|join('; ') or 'Разговор без записанных целей' }}</a>
+            {% if r['cf'] %}<span class="muted small">провёл(а) {{ r['cf'] }} {{ r['cl'] or '' }}</span>{% endif %}</span>
+          {% if r['next_date'] and loop.first %}<span class="chip {{ 'danger' if r['next_date'] < today().isoformat() else 'outline' }}">следующий {{ r['next_date']|d('short') }}</span>{% endif %}</li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">Разговоров ещё не было. Reflexionsgespräch по AK1: итоги, три цели и дата следующей встречи.</p>{% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Подготовка к ORGA</h2><a href="{{ url_for('main.orga', person=p['id']) }}">{{ 'Заполнить' if is_me else 'Открыть' }}</a></div>
+      {% if orga_last %}
+      <p class="small" style="margin: 0 0 10px">Последняя — за неделю с {{ orga_last['week']|d('dmy') }}.{% if orga_last['measures'] %} Меры: {{ orga_last['measures'] }}{% endif %}</p>
+      {% if orga_skills %}
+      <ul class="skill-bars">
+        {% for key, name, de in C.ORGA_SKILLS %}{% set v = orga_skills.get(key) %}{% if v is not none %}
+        <li><span>{{ name }}</span>{{ progress(v * 10, v >= 7, name) }}<b>{{ v }}</b>{% set bv = orga_before.get(key) %}<small class="{{ 'up' if bv is not none and v > bv else ('down' if bv is not none and v < bv else '') }}">{% if bv is not none and v != bv %}{{ '↑' if v > bv else '↓' }}{{ (v - bv)|abs }}{% endif %}</small></li>
+        {% endif %}{% endfor %}
+      </ul>
+      {% endif %}
+      {% else %}<p class="empty">Ещё не готовился. Вопросы ORGA Checkliste и самооценка по 9 навыкам — раз в неделю перед ORGA.</p>{% endif %}
+    </section>
+
     <section class="panel{{ ' flush' if kids }}">
       <div class="panel-head"><h2>Прямые партнёры</h2>
         <a href="{{ url_for('main.person_new', parent=p['id']) }}">Добавить партнёра</a></div>
@@ -77,6 +105,14 @@
         {% if p['note'] %}<dt>Заметка</dt><dd style="white-space: pre-line">{{ p['note'] }}</dd>{% endif %}
       </dl>
     </section>
+
+    {% if ob.current or p['stufe'] in C.NEWCOMER_STUFEN %}
+    <section class="panel">
+      <div class="panel-head"><h2>Старт</h2><a href="{{ url_for('main.person_start', pid=p['id']) }}">Отметить шаги</a></div>
+      {{ progress((100 * ob.done / ob.total)|round|int, ob.done == ob.total, 'Старт') }}
+      <p class="small" style="margin: 10px 0 0">Пройдено {{ ob.done }} из {{ ob.total }}.{% if ob.current %} Следующий шаг: «{{ ob.current.label }}»{% if ob.stuck %} — <b>без движения {{ ob.idle }} {{ plural(ob.idle, 'день', 'дня', 'дней') }}</b>{% endif %}.{% endif %}</p>
+    </section>
+    {% endif %}
 
     <section class="panel">
       <div class="panel-head"><h2>История ступеней</h2></div>

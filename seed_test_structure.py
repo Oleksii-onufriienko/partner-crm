@@ -4,6 +4,7 @@
     python seed_test_structure.py remove ПУТЬ/К/crm.sqlite3
     python seed_test_structure.py plan   ПУТЬ/К/crm.sqlite3
     python seed_test_structure.py growth ПУТЬ/К/crm.sqlite3
+    python seed_test_structure.py coach  ПУТЬ/К/crm.sqlite3
 
 add    — добавляет под первого администратора: 3 VBAK, 1 AL (у него ещё 1 VBAK) и 10 VM,
          у каждого — до 10 контактов, потенциальные сделки, встречи и немного сделок.
@@ -12,6 +13,8 @@ remove — удаляет всех тестовых людей (помечены
 plan   — заново заполняет план/факт по неделям у уже добавленных тестовых людей.
 growth — заново заполняет рост структуры у тестовых людей: история ступеней, сделки за год,
          кандидаты в партнёры по этапам и годовой план (Jahresplanung) на текущий год.
+coach  — заново заполняет наставничество и ежедневную работу: подготовка к ORGA, Reflexionsgespräche,
+         старт новичков, звонки из обзвона, цели и Musterwoche.
 Телефоны вымышленные (+49 000 …). Кабинетов (паролей) у тестовых людей нет.
 """
 import datetime as dt
@@ -22,7 +25,7 @@ import sys
 
 MARK = "[ТЕСТ]"
 
-if len(sys.argv) != 3 or sys.argv[1] not in ("add", "remove", "plan", "growth"):
+if len(sys.argv) != 3 or sys.argv[1] not in ("add", "remove", "plan", "growth", "coach"):
     sys.exit(__doc__)
 cmd, path = sys.argv[1], os.path.abspath(os.path.expanduser(sys.argv[2]))
 if not os.path.exists(path):
@@ -32,7 +35,7 @@ if not os.path.exists(path):
 os.environ["CRM_DB"] = path
 os.environ.setdefault("CRM_INSTANCE", os.path.dirname(path))
 from crm import create_app  # noqa: E402
-from crm.demo import add_growth, add_week_plans  # noqa: E402
+from crm.demo import add_coaching, add_growth, add_week_plans  # noqa: E402
 
 create_app()
 db = sqlite3.connect(path)
@@ -89,6 +92,17 @@ if cmd == "growth":
     db.commit()
     print(f"Рост структуры у {len(ids)} тестовых людей: {c['promotions']} повышений, {c['deals']} сделок за год, "
           f"{c['candidates']} кандидатов, {c['goals']} целей годового плана.")
+    sys.exit()
+
+if cmd == "coach":
+    ids = test_ids()
+    if not ids:
+        sys.exit("Тестовых людей нет. Сначала: python seed_test_structure.py add " + path)
+    admin_id = db.execute("SELECT id FROM persons WHERE is_admin = 1 ORDER BY id LIMIT 1").fetchone()[0]
+    c = add_coaching(db, ids, random.Random(13), created_by=admin_id)
+    db.commit()
+    print(f"Наставничество у {len(ids)} тестовых людей: {c['orga']} подготовок к ORGA, "
+          f"{c['reflections']} Reflexionsgespräche, {c['calls']} звонков; цели и Musterwoche заполнены.")
     sys.exit()
 
 if test_ids():
@@ -208,6 +222,7 @@ for pid in [vba1, vba2, vba3, al, vba4] + vms:
     add_week_plans(db, pid, rnd, scale=0.5 if pid in vms else 1.0, today=today)
 
 add_growth(db, [vba1, vba2, vba3, al, vba4] + vms, rnd, today=today, created_by=admin[0])
+add_coaching(db, [vba1, vba2, vba3, al, vba4] + vms, rnd, today=today, created_by=admin[0])
 
 db.commit()
 print(f"Добавлено под «{admin[1]} {admin[2]}»: 15 человек (3 VBAK, 1 AL с 1 VBAK, 10 VM), "

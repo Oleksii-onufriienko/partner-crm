@@ -27,6 +27,7 @@
     <div class="pl-day{{ ' weekend' if d.weekday() >= 5 }}{{ ' today' if d == today }}{{ ' past' if d < today }}">
       <div class="pl-date" data-wd="{{ WEEKDAYS[d.weekday()] }}"><b>{{ d.day }}</b>{% if d.day == 1 or (loop.first and loop.index0 == 0 and w == weeks[0]) %}<span class="m">{{ d|d('short') | replace(d.day ~ ' ', '') }}</span>{% endif %}
         <a class="pl-add" href="{{ url_for('main.meeting_new', person=p['id'], date=iso, next=request.full_path) }}" aria-label="Встреча на {{ d|d('long') }}">+</a></div>
+      {% if show_muster and d >= today %}{% for b in muster.get(d.weekday(), []) %}<span class="mw-bg k-{{ b['kind'] }}" title="Musterwoche: {{ b['kind']|label(C.MUSTER_KINDS) }}">{{ b['start'] }}–{{ b['end'] }} {{ b['title'] or (b['kind']|label(C.MUSTER_KINDS)) }}</span>{% endfor %}{% endif %}
       {% for m in by_day.get(iso, []) %}
         {% set who = ((m['cf'] ~ ' ' ~ (m['cl'] or '')) if m['cf'] else (m['title'] or '')).strip() %}
         <a class="mt st-{{ m['status'] }} fmt-{{ m['format'] }}" href="{{ url_for('main.meeting_edit', mid=m['id'], next=request.full_path) }}"
@@ -52,5 +53,7 @@
   <span><span class="mt st-done"><span class="stage">Проведена</span></span></span>
   <span><span class="mt st-cancelled"><span class="stage">Отменена</span></span></span>
   <span><span class="mt fmt-private">Личное время</span></span>
+  {% if muster %}<span><span class="mw-bg k-vb">Musterwoche</span> <a href="{{ url_for('main.planner', person=p['id'], start=start.isoformat(), mw='0' if show_muster else '1') }}">{{ 'скрыть' if show_muster else 'показать' }}</a></span>
+  {% else %}<span class="muted">Типичную неделю можно задать в <a href="{{ url_for('main.muster', person=p['id']) }}">Musterwoche</a> — она будет видна здесь фоном.</span>{% endif %}
 </div>
 {% endblock %}

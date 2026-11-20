@@ -46,7 +46,8 @@ VIEW_LANDING = {
     "auth.account": "main.dashboard",
 }
 VIEW_KEEP = {"main.dashboard", "main.contacts", "main.planner", "main.plan", "main.stats", "main.team",
-             "main.candidates", "main.year_plan", "main.career"}
+             "main.candidates", "main.year_plan", "main.career", "main.orga", "main.goals", "main.muster",
+             "main.calculator", "main.calls", "main.team_start", "main.team_coaching"}
 
 
 @bp.app_context_processor
@@ -175,7 +176,13 @@ def dashboard():
                            AND recruit_stage IN ('interest', 'invited', 'attended', 'talk')
                            GROUP BY recruit_stage""", (me["id"],))
 
+    from . import coach as CO
+    from . import daily as DA
+    orga_week = CO.orga_default_week(t)
+    orga_done = CO.get_orga(me["id"], orga_week) is not None
+
     return render_template("dashboard.html", p=me, m=metrics, today_meetings=today_meetings,
+                           calls_stats=DA.calls_today(me["id"]), orga_week=orga_week, orga_done=orga_done,
                            week_summary=week_view["summary"], has_week_plan=has_week_plan,
                            upcoming=upcoming, stale=stale, followups=followups, team=team,
                            birthdays=birthdays, month_label=S.period_from_args({})[3],
@@ -308,11 +315,17 @@ def person(pid):
         invite = None
     parent = vp.get(p["parent_id"]) if p["parent_id"] else None
     from . import career as K
+    from . import coach as CO
     facts = K.facts([pid], vp, children_map())[pid]
+    orga_rows = CO.orga_history(pid, 2)
     return render_template("person.html", p=p, own=own, total=total, sig=sig,
                            kids=direct_children(pid), branch_size=len(b), parent=parent,
                            invite=invite, manage=can_manage(p), period_label=label,
-                           steps=K.plan_for(p, facts), history=K.history(pid), facts=facts)
+                           steps=K.plan_for(p, facts), history=K.history(pid), facts=facts,
+                           reflections=CO.reflections_of(pid)[:4], ob=CO.onboarding([pid])[pid],
+                           orga_last=orga_rows[0] if orga_rows else None,
+                           orga_skills=CO.skills_of(orga_rows[0]) if orga_rows else {},
+                           orga_before=CO.skills_of(orga_rows[1]) if len(orga_rows) > 1 else {})
 
 
 @bp.route("/people/<int:pid>/edit", methods=["GET", "POST"])
@@ -689,7 +702,14 @@ def planner():
             "done": sum(1 for m in items if m["status"] == "done"),
             "ke": sum((m["expected_ke"] or 0) for m in items if m["status"] != "cancelled"),
         })
+    muster = {}
+    for b in query("SELECT * FROM muster_blocks WHERE person_id = ? ORDER BY start", (pid,)):
+        muster.setdefault(b["weekday"], []).append(b)
+    if request.args.get("mw") in ("0", "1"):
+        session["show_muster"] = request.args.get("mw") == "1"
+    show_muster = session.get("show_muster", True)
     return render_template("planner.html", p=p, weeks=weeks, by_day=by_day, start=start, end=end,
+                           muster=muster, show_muster=show_muster,
                            prev=start - dt.timedelta(days=PLANNER_WEEKS * 7),
                            next=start + dt.timedelta(days=PLANNER_WEEKS * 7),
                            today=today(), options=person_options())

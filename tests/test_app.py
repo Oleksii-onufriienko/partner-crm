@@ -63,7 +63,12 @@ class PagesTest(Base):
                     f"/plan/edit?person={self.pid('Кох')}&month=2030-02",
                     "/team/candidates", "/team/candidates?scope=team", "/team/year", "/team/year?year=2025",
                     "/team/year/edit", "/team/career", f"/team/career?person={self.pid('Ланге')}",
-                    f"/team/year?person={self.pid('Ланге')}"]:
+                    f"/team/year?person={self.pid('Ланге')}",
+                    "/plan/orga", "/plan/orga?week=2026-01-05", "/plan/goals", "/plan/muster", "/plan/calculator",
+                    "/plan/calculator?income=4000&rate=9&q_ke_client=30", "/calls", "/calls?mode=all", "/calls?mode=new",
+                    "/team/start", "/team/start?all=1", "/team/coaching", "/team/coaching?scope=branch",
+                    f"/people/{self.pid('Ланге')}/reflection", f"/people/{self.pid('Кох')}/start",
+                    f"/plan/orga?person={self.pid('Ланге')}", "/planner?mw=0", "/planner?mw=1"]:
             r = c.get(url)
             self.assertEqual(r.status_code, 200, url)
             self.assertNotIn(b"Traceback", r.data)
@@ -72,7 +77,9 @@ class PagesTest(Base):
         c = self.client_for("oleg@demo.local")
         for url in ["/", "/team", "/contacts", "/planner", "/stats", "/account", "/meetings/new", "/contacts/new",
                     "/plan", "/plan/edit", "/plan?scope=team", "/team/candidates", "/team/year",
-                    "/team/year/edit", "/team/career", f"/people/{self.pid('Майер')}"]:
+                    "/team/year/edit", "/team/career", f"/people/{self.pid('Майер')}",
+                    "/plan/orga", "/plan/goals", "/plan/muster", "/plan/calculator", "/calls", "/team/start",
+                    "/team/coaching", f"/people/{self.pid('Майер')}/start"]:
             self.assertEqual(c.get(url).status_code, 200, url)
 
     def test_unauthenticated_redirects_to_login(self):
@@ -502,6 +509,175 @@ class GrowthFlowTest(Base):
         self.assertEqual(n, 13)
         page = c.get(f"/team/year?year={year}").get_data(as_text=True)
         self.assertIn("из 480", page)          # 12 × 40 за год
+
+
+class CoachingTest(Base):
+    def db_(self):
+        import sqlite3
+        db = sqlite3.connect(self.db)
+        db.row_factory = sqlite3.Row
+        return db
+
+    def test_orga_save_and_weak_signal(self):
+        import datetime as dt
+        from crm.util import today
+        c = self.client_for("oleg@demo.local")
+        oleg = self.pid("Майер")
+        last_week = today() - dt.timedelta(days=today().weekday() + 7)
+        db = self.db_()
+        db.execute("DELETE FROM orga_checks WHERE person_id = ?", (oleg,))
+        db.commit()
+        admin = self.client_for("admin@demo.local")
+        page = admin.get(f"/people/{oleg}").get_data(as_text=True)
+        self.assertIn("Не подготовился к ORGA", page)
+        data = {"csrf_token": self.csrf(c), "week": last_week.isoformat(), "went_well": "Три термина",
+                "measures": "Звонить в понедельник", "prev_done": "1", "tables_ready": "1", "next_stufe": "VBAK"}
+        data.update({f"skill_{k}": "7" for k in ("service", "contact", "analysis")})
+        data["skill_recruit"] = "12"            # вне шкалы — не сохраняется
+        r = c.post("/plan/orga", data=data)
+        self.assertEqual(r.status_code, 302)
+        row = self.db_().execute("SELECT * FROM orga_checks WHERE person_id = ? AND week = ?",
+                                 (oleg, last_week.isoformat())).fetchone()
+        self.assertEqual(row["went_well"], "Три термина")
+        import json
+        self.assertEqual(json.loads(row["skills"]), {"service": 7, "contact": 7, "analysis": 7})
+        page = admin.get(f"/people/{oleg}").get_data(as_text=True)
+        self.assertNotIn("Не подготовился к ORGA", page)
+        self.assertIn("Звонить в понедельник", admin.get("/team/coaching").get_data(as_text=True) +
+                      admin.get(f"/people/{oleg}").get_data(as_text=True))
+
+    def test_reflection_creates_meeting_for_coach(self):
+        c = self.client_for("admin@demo.local")
+        anna = self.pid("Фишер")
+        page = c.get(f"/people/{anna}/reflection").get_data(as_text=True)
+        self.assertIn("Чего достигли", page)
+        r = c.post(f"/people/{anna}/reflection", data={
+            "csrf_token": self.csrf(c), "date": "2026-11-20", "people_coach": "1", "res_analyses": "4",
+            "goal1": "10 звонков в день", "goal2": "2 финанализа", "goal3": "Экзамен VM",
+            "next_date": "2026-12-18", "next_time": "18:30", "satisfaction": "4"})
+        self.assertEqual(r.status_code, 302)
+        db = self.db_()
+        refl = db.execute("SELECT * FROM reflections WHERE person_id = ? ORDER BY id DESC", (anna,)).fetchone()
+        self.assertEqual(refl["goal1"], "10 звонков в день")
+        m = db.execute("SELECT * FROM meetings WHERE id = ?", (refl["meeting_id"],)).fetchone()
+        self.assertEqual((m["owner_id"], m["date"], m["time"], m["stage"]),
+                         (self.pid("Берг"), "2026-12-18", "18:30", "reflection"))
+        # перенос даты двигает встречу, удаление убирает её
+        c.post(f"/people/{anna}/reflection/{refl['id']}", data={"csrf_token": self.csrf(c), "date": "2026-11-20",
+                                                                  "next_date": "2026-12-22"})
+        self.assertEqual(self.db_().execute("SELECT date FROM meetings WHERE id = ?", (m["id"],)).fetchone()[0],
+                         "2026-12-22")
+        c.post(f"/people/{anna}/reflection/{refl['id']}/delete", data={"csrf_token": self.csrf(c)})
+        self.assertIsNone(self.db_().execute("SELECT 1 FROM meetings WHERE id = ?", (m["id"],)).fetchone())
+
+    def test_onboarding_steps(self):
+        c = self.client_for("admin@demo.local")
+        yulia = self.pid("Беккер")
+        r = c.post(f"/people/{yulia}/start", data={"csrf_token": self.csrf(c), "d_info": "2026-10-01",
+                                                   "d_vm_exam": "2026-11-02", "r_vm_exam": "failed",
+                                                   "topic1": "Finanzanalyse", "topic1_d": "2026-10-10"})
+        self.assertEqual(r.status_code, 302)
+        with self.app.test_request_context():
+            from flask import g
+            from crm.db import query
+            from crm import coach
+            g.user = query("SELECT * FROM persons WHERE email = 'admin@demo.local'", one=True)
+            ob = coach.onboarding([yulia])[yulia]
+        steps = {s["key"]: s for s in ob["steps"]}
+        self.assertTrue(steps["info"]["done"])
+        self.assertFalse(steps["vm_exam"]["done"])       # не сдан — шаг не пройден
+        self.assertEqual(ob["topics"][0]["note"], "Finanzanalyse")
+        self.assertIn("Юлия", c.get("/team/start?all=1").get_data(as_text=True))
+
+
+class DailyWorkTest(Base):
+    def db_(self):
+        import sqlite3
+        db = sqlite3.connect(self.db)
+        db.row_factory = sqlite3.Row
+        return db
+
+    def test_call_results(self):
+        import datetime as dt
+        from crm.util import today
+        c = self.client_for("oleg@demo.local")
+        oleg = self.pid("Майер")
+        db = self.db_()
+        ids = [r[0] for r in db.execute("SELECT id FROM contacts WHERE owner_id = ? AND status != 'no_chance' LIMIT 3",
+                                        (oleg,))]
+        self.assertEqual(len(ids), 3)
+        self.assertEqual(c.get("/calls?mode=all").status_code, 200)
+        tomorrow = (today() + dt.timedelta(days=1)).isoformat()
+        r = c.post(f"/calls/{ids[0]}", data={"csrf_token": self.csrf(c), "result": "appointment", "date": tomorrow,
+                                             "time": "18:00", "stage": "first", "format": "offline"})
+        self.assertEqual(r.status_code, 302)
+        c.post(f"/calls/{ids[1]}", data={"csrf_token": self.csrf(c), "result": "callback",
+                                          "callback_date": "2030-01-15", "note": "После отпуска"})
+        c.post(f"/calls/{ids[2]}", data={"csrf_token": self.csrf(c), "result": "no_chance"})
+        db = self.db_()
+        st = {r["id"]: r for r in db.execute(f"SELECT * FROM contacts WHERE id IN ({ids[0]}, {ids[1]}, {ids[2]})")}
+        self.assertEqual(st[ids[0]]["status"], "appointment")
+        self.assertEqual((st[ids[1]]["status"], st[ids[1]]["next_action_date"], st[ids[1]]["next_action"]),
+                         ("followup", "2030-01-15", "После отпуска"))
+        self.assertEqual(st[ids[2]]["status"], "no_chance")
+        m = db.execute("SELECT * FROM meetings WHERE contact_id = ? AND date = ?", (ids[0], tomorrow)).fetchone()
+        self.assertEqual((m["stage"], m["status"], m["time"]), ("first", "planned", "18:00"))
+        # три разговора — в «контакты для первого термина» в план/факт этой недели
+        from crm import plan as P
+        from crm.util import monday
+        with self.app.test_request_context():
+            g = P.grids([oleg], [monday(today())])[oleg][monday(today()).isoformat()]
+        self.assertGreaterEqual(g["fa_contacts"]["auto"], 3)
+        # тем, кому уже звонили сегодня, второй раз не предлагаем
+        from crm import daily
+        with self.app.test_request_context():
+            queued = {r["id"] for r in daily.call_queue(oleg, "all")}
+        self.assertFalse(queued & set(ids))
+
+    def test_calculator_math_and_apply(self):
+        from crm.daily import calculate
+        q = {"ke_client": 25, "br_client": 1.5, "fa_br": 1.3, "held_fa": 1.5, "agreed_held": 1.3, "contacts_agreed": 3.3}
+        rows = {r["key"]: r for r in calculate(3000, 10, q)}
+        self.assertAlmostEqual(rows["units"]["month"], 300)
+        self.assertAlmostEqual(rows["clients"]["month"], 12)
+        self.assertAlmostEqual(rows["consults"]["month"], 18)
+        self.assertAlmostEqual(rows["contacts"]["month"], 12 * 1.5 * 1.3 * 1.5 * 1.3 * 3.3)
+        c = self.client_for("oleg@demo.local")
+        data = {"csrf_token": self.csrf(c), "income": "3000", "rate": "10", "month": "2030-03"}
+        data.update({f"q_{k}": str(v) for k, v in q.items()})
+        r = c.post("/plan/calculator/apply", data=data)
+        self.assertEqual(r.status_code, 302)
+        rows_db = self.db_().execute("""SELECT metric, soll FROM week_plan WHERE person_id = ? AND week = '2030-03-04'""",
+                                     (self.pid("Майер"),)).fetchall()
+        got = {r["metric"]: r["soll"] for r in rows_db}
+        self.assertEqual(got["br_clients"], 3)            # 12 / 4,33 = 2,8 → 3 в неделю
+        self.assertEqual(got["br_ke"], 70)                # 300 / 4,33 = 69 → округление до 5
+
+    def test_goals_and_muster(self):
+        c = self.client_for("oleg@demo.local")
+        r = c.post("/plan/goals", data={"csrf_token": self.csrf(c), "fin_month_this": "2500", "mat_next": "Машина",
+                                        "rw_0_what": "Отпуск", "rw_0_when": "2027-07-01", "career_stufe": "VBAK",
+                                        "comp_lls_goal": "Elite-Club"})
+        self.assertEqual(r.status_code, 302)
+        page = c.get("/plan/goals").get_data(as_text=True)
+        self.assertIn('value="2500"', page)
+        self.assertIn("Машина", page)
+        self.assertIn("Elite-Club", page)
+        self.assertIn('name="income" value="2500"', c.get("/plan/calculator").get_data(as_text=True))
+        r = c.post("/plan/muster", data={"csrf_token": self.csrf(c), "wd_0": "1", "wd_2": "1", "start": "18:00",
+                                         "end": "20:00", "kind": "vb", "title": "Звонки"})
+        self.assertEqual(r.status_code, 302)
+        r = c.post("/plan/muster", data={"csrf_token": self.csrf(c), "wd_1": "1", "start": "20:00", "end": "19:00",
+                                         "kind": "vb"}, follow_redirects=True)
+        self.assertIn("позже".encode(), r.data)
+        db = self.db_()
+        blocks = db.execute("SELECT * FROM muster_blocks WHERE person_id = ? AND title = 'Звонки'",
+                            (self.pid("Майер"),)).fetchall()
+        self.assertEqual(sorted(b["weekday"] for b in blocks), [0, 2])
+        self.assertIn("Звонки", c.get("/planner").get_data(as_text=True))
+        c.post("/plan/muster", data={"csrf_token": self.csrf(c), "action": "delete", "id": blocks[0]["id"]})
+        self.assertEqual(self.db_().execute("SELECT COUNT(*) FROM muster_blocks WHERE person_id = ? AND title = 'Звонки'",
+                                            (self.pid("Майер"),)).fetchone()[0], 1)
 
 
 class MigrationTest(unittest.TestCase):

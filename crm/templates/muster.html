@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, plan_tabs with context %}
+{% block title %}Musterwoche{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Musterwoche</h1>
+    <p class="sub">Какой будет ваша типичная неделя: работа, VM/VB-дела, тим-митинги, обучение и личное время (AK1, с. 10). Блоки видны фоном в планере.</p>
+  </div>
+</header>
+{{ plan_tabs('main.muster', p['id']) }}
+
+{% set span = (last - first) * 60 %}
+<div class="mw-wrap">
+<section class="panel flush mw-panel" aria-label="Неделя по часам">
+  <div class="mw" style="--hours: {{ last - first }}">
+    <div class="mw-times" aria-hidden="true">{% for h in range(first, last) %}<span>{{ '%02d'|format(h) }}:00</span>{% endfor %}</div>
+    {% for d in range(7) %}
+    <div class="mw-day{{ ' weekend' if d >= 5 }}">
+      <div class="mw-dh">{{ WEEKDAYS[d] }}</div>
+      <div class="mw-col">
+        {% for b in by_day[d] %}
+        {% set top = (minutes(b['start']) - first * 60) / span * 100 %}
+        {% set h = (minutes(b['end']) - minutes(b['start'])) / span * 100 %}
+        <div class="mw-b k-{{ b['kind'] }}" style="top: {{ top }}%; height: {{ h }}%" title="{{ b['start'] }}–{{ b['end'] }} {{ b['kind']|label(C.MUSTER_KINDS) }}{{ ': ' ~ b['title'] if b['title'] }}">
+          <b>{{ b['title'] or (b['kind']|label(C.MUSTER_KINDS)) }}</b><span>{{ b['start'] }}–{{ b['end'] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<aside>
+  <form method="post" class="panel mw-add">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="panel-head"><h2>Добавить блок</h2></div>
+    <div class="field"><span class="field-label">Дни</span>
+      <div class="days-pick">{% for d in range(7) %}<label><input type="checkbox" name="wd_{{ d }}" value="1"><span>{{ WEEKDAYS[d] }}</span></label>{% endfor %}</div></div>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">С</span><input type="time" name="start" value="18:00" required></label>
+      <label class="field"><span class="field-label">До</span><input type="time" name="end" value="20:00" required></label>
+    </div>
+    <label class="field"><span class="field-label">Что</span>
+      <select name="kind">{% for k, n, de in C.MUSTER_KINDS %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></label>
+    <label class="field"><span class="field-label">Подпись (по желанию)</span><input type="text" name="title" maxlength="80" placeholder="например, звонки по Marktpotenzial"></label>
+    <div class="form-actions"><button class="btn primary">{{ icon('plus') }}Добавить</button></div>
+  </form>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Часы в неделю</h2></div>
+    <ul class="mw-legend">
+      {% for k, n, de in C.MUSTER_KINDS %}<li><i class="k-{{ k }}"></i><span>{{ n }}<small>{{ de }}</small></span><b>{{ hours.get(k, 0)|num(1) }} ч</b></li>{% endfor %}
+    </ul>
+  </section>
+
+  {% if blocks %}
+  <section class="panel">
+    <div class="panel-head"><h2>Все блоки</h2></div>
+    <ul class="item-list">
+      {% for b in blocks %}
+      <li><span class="nowrap"><b>{{ WEEKDAYS[b['weekday']] }}</b> {{ b['start'] }}–{{ b['end'] }}</span><span class="grow">{{ b['title'] or (b['kind']|label(C.MUSTER_KINDS)) }}</span>
+        <form method="post" class="inline"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="{{ b['id'] }}">
+          <button class="btn small ghost" aria-label="Удалить блок">Удалить</button></form></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+</aside>
+</div>
+{% endblock %}

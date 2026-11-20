@@ -247,6 +247,11 @@ def signals(persons, settings=None, all_rules=False):
         f"""SELECT DISTINCT person_id FROM week_plan WHERE person_id IN ({marks})
             AND week = ? AND soll IS NOT NULL""", [*ids, week])}
 
+    last_week = (t - dt.timedelta(days=t.weekday() + 7)).isoformat()
+    has_orga = {r["person_id"] for r in query(
+        f"""SELECT DISTINCT person_id FROM orga_checks WHERE person_id IN ({marks}) AND week >= ?""",
+        [*ids, last_week])}
+
     out = {}
     for p in persons:
         pid, lst = p["id"], []
@@ -269,6 +274,8 @@ def signals(persons, settings=None, all_rules=False):
             lst.append(Signal("stale", f"Не отмечен итог прошедших встреч: {stale_planned[pid]}"))
         if on["no_week_plan"] and pid not in has_week_plan:
             lst.append(Signal("no_week_plan", "Не заполнен план на эту неделю"))
+        if on["no_orga"] and pid not in has_orga:
+            lst.append(Signal("no_orga", "Не подготовился к ORGA за прошлую неделю"))
         out[pid] = lst
     return out
 

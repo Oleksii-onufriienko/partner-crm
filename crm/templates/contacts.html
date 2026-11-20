@@ -13,7 +13,7 @@
     <p class="sub">{{ totals['n'] }} {{ plural(totals['n'], 'человек', 'человека', 'человек') }}, из них {{ totals['clients'] or 0 }} {{ plural(totals['clients'] or 0, 'клиент', 'клиента', 'клиентов') }}.
       {% if totals['n'] < C.MIN_MARKTPOTENZIAL %}Минимум — {{ C.MIN_MARKTPOTENZIAL }} человек.{% endif %}</p>
   </div>
-  <div class="actions"><a class="btn primary" href="{{ url_for('main.contact_new', person=owner['id']) }}">{{ icon('plus') }}Контакт с деталями</a></div>
+  <div class="actions"><a class="btn" href="{{ url_for('main.calls', person=owner['id']) }}">{{ icon('phone') }}Обзвон</a><a class="btn primary" href="{{ url_for('main.contact_new', person=owner['id']) }}">{{ icon('plus') }}Контакт с деталями</a></div>
 </header>
 
 <form class="filters" method="get" role="search" aria-label="Фильтры">

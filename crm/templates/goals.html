@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, plan_tabs with context %}
+{% block title %}Цели{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Цели</h1>
+    <p class="sub">Zukunftsplanung из Erfolgsjournal и AK1: деньги, вещи, личное — на этот год, следующий и через 5 лет. Карьерная цель и доход отсюда подставляются в подготовку к ORGA и калькулятор.</p>
+  </div>
+</header>
+{{ plan_tabs('main.goals', p['id']) }}
+
+<form method="post" class="goals">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <section class="panel">
+    <div class="panel-head"><h2>Карьера и девиз</h2></div>
+    <div class="form-grid three">
+      <label class="field"><span class="field-label">Следующая ступень</span>
+        <select name="career_stufe"><option value="">—</option>
+          {% set cur = d.get('career_stufe') or (targets[0] if targets else '') %}
+          {% for code, name, coef in C.STUFEN %}<option value="{{ code }}"{% if cur == code %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select></label>
+      <label class="field"><span class="field-label">К какой дате</span><input type="date" name="career_date" value="{{ d.get('career_date') or '' }}"></label>
+      <label class="field"><span class="field-label">Мой девиз</span><input type="text" name="motto" maxlength="300" value="{{ d.get('motto') or '' }}" placeholder="коротко и по-своему"></label>
+    </div>
+  </section>
+
+  <section class="panel flush">
+    <div class="panel-head"><h2>Цели по годам</h2></div>
+    <div class="table-wrap">
+    <table class="table goals-table">
+      <thead><tr><th></th>{% for key, name, de in periods %}<th>{{ name }}<span class="sub">{{ year + (0 if key == 'this' else (1 if key == 'next' else 5)) }}</span></th>{% endfor %}</tr></thead>
+      <tbody>
+        <tr><th scope="row">Доход, € в месяц<span class="sub">Finanzielle Ziele</span></th>
+          {% for pp in periods %}{% set key = pp[0] %}<td><input type="text" inputmode="decimal" name="fin_month_{{ key }}" value="{{ '%g'|format(d['fin_month_' ~ key]) if d.get('fin_month_' ~ key) is not none else '' }}" aria-label="Доход в месяц"></td>{% endfor %}</tr>
+        <tr><th scope="row">Доход, € в год</th>
+          {% for pp in periods %}{% set key = pp[0] %}<td><input type="text" inputmode="decimal" name="fin_year_{{ key }}" value="{{ '%g'|format(d['fin_year_' ~ key]) if d.get('fin_year_' ~ key) is not none else '' }}" aria-label="Доход в год"></td>{% endfor %}</tr>
+        <tr><th scope="row">Вещи<span class="sub">Materielle Ziele</span></th>
+          {% for pp in periods %}{% set key = pp[0] %}<td><textarea name="mat_{{ key }}" rows="2" aria-label="Материальные цели">{{ d.get('mat_' ~ key) or '' }}</textarea></td>{% endfor %}</tr>
+        <tr><th scope="row">Личное<span class="sub">Persönliche Ziele</span></th>
+          {% for pp in periods %}{% set key = pp[0] %}<td><textarea name="pers_{{ key }}" rows="2" aria-label="Личные цели">{{ d.get('pers_' ~ key) or '' }}</textarea></td>{% endfor %}</tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <div class="grid-2">
+  <section class="panel flush">
+    <div class="panel-head"><h2>Конкурсы</h2><span class="muted small">Wettbewerb</span></div>
+    <div class="table-wrap">
+    <table class="table goals-table">
+      <thead><tr><th></th><th>Цель</th><th>Условие</th><th>Приз</th></tr></thead>
+      <tbody>{% for key, name, de in comps %}{% set c = d.get('comp_' ~ key) or {} %}
+        <tr><th scope="row">{{ name }}</th>
+          <td><input type="text" name="comp_{{ key }}_goal" value="{{ c.get('goal') or '' }}" maxlength="200" aria-label="{{ name }}: цель"></td>
+          <td><input type="text" name="comp_{{ key }}_target" value="{{ c.get('target') or '' }}" maxlength="200" aria-label="{{ name }}: условие"></td>
+          <td><input type="text" name="comp_{{ key }}_prize" value="{{ c.get('prize') or '' }}" maxlength="200" aria-label="{{ name }}: приз"></td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="panel flush">
+    <div class="panel-head"><h2>Чем награжу себя</h2><span class="muted small">Persönliche Belohnungsliste</span></div>
+    <div class="table-wrap">
+    <table class="table goals-table">
+      <thead><tr><th>Что</th><th>Когда</th><th>За что</th></tr></thead>
+      <tbody>{% set rw = d.get('rewards') or [] %}
+        {% for i in range(rewards_n) %}{% set r = rw[i] if i < rw|length else {} %}
+        <tr><td><input type="text" name="rw_{{ i }}_what" value="{{ r.get('what') or '' }}" maxlength="200" aria-label="Награда {{ i + 1 }}"></td>
+          <td><input type="date" name="rw_{{ i }}_when" value="{{ r.get('when') or '' }}" aria-label="Когда"></td>
+          <td><input type="text" name="rw_{{ i }}_why" value="{{ r.get('why') or '' }}" maxlength="200" aria-label="За что"></td></tr>
+        {% endfor %}</tbody>
+    </table>
+    </div>
+  </section>
+  </div>
+  <div class="form-actions"><button class="btn primary">Сохранить цели</button>
+    {% if d.get('fin_month_this') %}<a class="btn ghost" href="{{ url_for('main.calculator', person=p['id']) }}">Посчитать, что нужно для {{ d['fin_month_this']|eur }} в месяц</a>{% endif %}</div>
+</form>
+{% endblock %}

@@ -41,14 +41,14 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
 
-    from . import auth, main, growth  # noqa: F401  growth добавляет маршруты в main.bp
+    from . import auth, main, growth, coach, daily  # noqa: F401  добавляют маршруты в main.bp
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
 
     from . import constants as C
     from . import util as U
     app.jinja_env.globals.update(
-        C=C, csrf_token=auth.csrf_token, plural=U.plural, today=U.today, version=__version__,
+        C=C, csrf_token=auth.csrf_token, timedelta=dt.timedelta, plural=U.plural, today=U.today, version=__version__,
         WEEKDAYS=U.WEEKDAYS, safe_next=U.safe_next,
         month_name=lambda d: f"{U.MONTHS_NOM[d.month - 1].capitalize()} {d.year}")
     app.jinja_env.filters.update(

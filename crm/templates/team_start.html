@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, team_tabs, progress with context %}
+{% block title %}Старт новичков{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Старт новичков</h1>
+    <p class="sub">Шаги из Ausbildungsplanung AK1 у тех, кто ещё в начале пути. Сверху — кто застрял: нового шага не было больше {{ C.ONBOARDING_STUCK_DAYS }} дней.</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('main.team_start', person=p['id'], all='0' if show_all else '1') }}">{{ 'Только новички' if show_all else 'Показать всех' }}</a>
+  </div>
+</header>
+{{ team_tabs('main.team_start', p['id']) }}
+
+{% if rows %}
+<section class="panel flush">
+  <div class="table-wrap">
+  <table class="table start-table">
+    <thead><tr><th>Партнёр</th><th class="num">В бизнесе</th><th class="st-steps">Шаги</th><th>Следующий шаг</th><th class="num">Без нового шага</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      {% set ob = r.ob %}
+      <tr>
+        <td><a class="row-link" href="{{ url_for('main.person_start', pid=r.p['id']) }}">{{ r.p|fullname }}</a><span class="sub">{{ r.p['stufe'] }}</span></td>
+        <td class="num nowrap">{{ ob.days_in }} {{ plural(ob.days_in, 'день', 'дня', 'дней') }}</td>
+        <td class="st-steps">
+          <span class="dots" role="img" aria-label="Пройдено {{ ob.done }} из {{ ob.total }}">{% for s in ob.steps %}<i class="{{ 'on' if s.done }}{{ ' cur' if ob.current and s.key == ob.current.key }}" title="{{ s.label }}{{ ': ' ~ s.date|d('dmy') if s.date and s.done }}"></i>{% endfor %}</span>
+          <span class="muted small">{{ ob.done }} из {{ ob.total }}</span></td>
+        <td>{% if ob.current %}{{ ob.current.label }}{% else %}<span class="chip ok">Всё пройдено</span>{% endif %}</td>
+        <td class="num nowrap">{% if ob.stuck %}<span class="chip warn">{{ ob.idle }} {{ plural(ob.idle, 'день', 'дня', 'дней') }}</span>{% elif ob.current %}{{ ob.idle }} {{ plural(ob.idle, 'день', 'дня', 'дней') }}{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+<p class="foot-note">Шаги по порядку: {{ C.ONBOARDING_STEPS|map(attribute=1)|join(', ') }}. Нажмите на имя, чтобы отметить шаги и темы обучения.</p>
+{% else %}
+<section class="panel"><p class="empty">{% if show_all %}В структуре пока никого.{% else %}Новичков, которые ещё не прошли старт, нет. Новый партнёр появится здесь сразу после добавления в структуру.{% endif %}</p></section>
+{% endif %}
+{% endblock %}

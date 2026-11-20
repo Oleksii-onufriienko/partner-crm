@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, plan_tabs with context %}
+{% block title %}Подготовка к ORGA{% endblock %}
+{% macro val(key, default='') -%}{{ (row[key] if row and row[key] is not none else default) }}{%- endmacro %}
+{% block content %}
+{% set is_me = p['id'] == g.user['id'] %}
+{% set wk_end = week + timedelta(days=6) %}
+<header class="page-head">
+  <div>
+    <h1>Подготовка к ORGA</h1>
+    <p class="sub">Неделя {{ week|d('dmy') }} – {{ wk_end|d('dmy') }}{% if not is_me %}, {{ p|fullname }}{% endif %}. Вопросы ORGA Checkliste из Erfolgsjournal и самооценка. {{ 'Заполните до ORGA — наставник увидит ответы.' if is_me else 'Ответы партнёра перед ORGA.' }}</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('main.orga', person=p['id'], week=prev_week.isoformat()) }}" aria-label="Прошлая неделя">{{ icon('chev-l') }}</a>
+    <a class="btn" href="{{ url_for('main.orga', person=p['id']) }}">К ближайшей ORGA</a>
+    <a class="btn ghost" href="{{ url_for('main.orga', person=p['id'], week=next_week.isoformat()) }}" aria-label="Следующая неделя">{{ icon('chev-r') }}</a>
+  </div>
+</header>
+{{ plan_tabs('main.orga', p['id']) }}
+{% if row %}<p class="flash ok-note">Заполнено {{ row['updated_at'][:10]|d('dmy') }}. Можно дополнить и сохранить ещё раз.</p>{% endif %}
+
+<div class="grid-2 orga-grid">
+<form method="post" class="panel orga-form">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="week" value="{{ week.isoformat() }}">
+
+  <section class="orga-sec">
+    <h2>Готов к ORGA?</h2>
+    <label class="check"><input type="checkbox" name="tables_ready" value="1"{% if row and row['tables_ready'] %} checked{% endif %}>
+      <span>Цели, годовой, месячный и недельный план обновлены<span class="field-hint">Zukunfts-, Jahres-, Monats- und Wochenplanung</span></span></label>
+    <label class="check"><input type="checkbox" name="next_plan_ready" value="1"{% if (row and row['next_plan_ready']) or (not row and has_next_plan) %} checked{% endif %}>
+      <span>План на следующую неделю составлен<span class="field-hint">{% if has_next_plan %}В «План и факт» на {{ next_week|d('dmy') }} план уже есть.{% else %}В «План и факт» на {{ next_week|d('dmy') }} плана пока нет — <a href="{{ url_for('main.plan_edit', person=p['id'], month=next_week.strftime('%Y-%m')) }}">заполнить</a>.{% endif %}</span></span></label>
+    <label class="check"><input type="checkbox" name="potential_ready" value="1"{% if row and row['potential_ready'] %} checked{% endif %}>
+      <span>Marktpotenzial на следующую неделю проработан<span class="field-hint">Кому звоню, с кем договариваюсь — Potenzialliste Kunden</span></span></label>
+  </section>
+
+  <section class="orga-sec">
+    <h2>Моя следующая цель</h2>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Ступень</span>
+        {% set cur = val('next_stufe', goals.get('stufe') or (targets[0] if targets else '')) %}
+        <select name="next_stufe"><option value="">—</option>
+          {% for code, name, coef in C.STUFEN %}<option value="{{ code }}"{% if cur == code %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select></label>
+      <label class="field"><span class="field-label">К какой дате</span>
+        <input type="date" name="next_stufe_date" value="{{ val('next_stufe_date', goals.get('date') or '') }}"></label>
+    </div>
+  </section>
+
+  <section class="orga-sec">
+    <h2>Неделя: что я понял</h2>
+    <div class="orga-summary" aria-label="План и факт недели">
+      {% for s in summary %}<span><b>{{ (s.ist or 0)|num(0) }}</b>{% if s.soll is not none %} из {{ s.soll|num(0) }}{% endif %}<small>{{ s.label }}</small></span>{% endfor %}
+    </div>
+    <label class="field"><span class="field-label">Вывод из плана и факта</span>
+      <textarea name="insight" rows="2">{{ val('insight') }}</textarea></label>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Что получилось за неделю</span><textarea name="went_well" rows="3">{{ val('went_well') }}</textarea></label>
+      <label class="field"><span class="field-label">Почему</span><textarea name="why_well" rows="3">{{ val('why_well') }}</textarea></label>
+    </div>
+  </section>
+
+  <section class="orga-sec">
+    <h2>Следующая неделя</h2>
+    <label class="field"><span class="field-label">Что хочу улучшить</span><textarea name="improve" rows="2">{{ val('improve') }}</textarea></label>
+    <label class="field"><span class="field-label">Какие меры принимаю</span><textarea name="measures" rows="2">{{ val('measures') }}</textarea></label>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Когда</span><input type="date" name="measures_when" value="{{ val('measures_when') }}"></label>
+      <label class="field"><span class="field-label">Кто меня проверяет</span><input type="text" name="controller" value="{{ val('controller') }}" maxlength="200"></label>
+    </div>
+  </section>
+
+  <section class="orga-sec">
+    <h2>Меры прошлой недели</h2>
+    {% if prev and prev['measures'] %}<blockquote class="prev-measures">{{ prev['measures'] }}{% if prev['measures_when'] %}<span class="muted"> — до {{ prev['measures_when']|d('dmy') }}</span>{% endif %}</blockquote>
+    {% else %}<p class="muted small">На прошлой неделе мер не записано.</p>{% endif %}
+    <div class="seg" role="radiogroup" aria-label="Выполнил ли меры">
+      {% set pd = row['prev_done'] if row else none %}
+      <label><input type="radio" name="prev_done" value="1"{% if pd == 1 %} checked{% endif %}><span>Выполнил</span></label>
+      <label><input type="radio" name="prev_done" value="0"{% if pd == 0 %} checked{% endif %}><span>Не выполнил</span></label>
+    </div>
+    <label class="field" style="margin-top: 10px"><span class="field-label">Почему</span><input type="text" name="prev_why" value="{{ val('prev_why') }}" maxlength="500"></label>
+  </section>
+
+  <section class="orga-sec">
+    <h2>Награда</h2>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Как награжу себя</span><input type="text" name="reward" value="{{ val('reward') }}" maxlength="200"></label>
+      <label class="field"><span class="field-label">За что</span><input type="text" name="reward_for" value="{{ val('reward_for') }}" maxlength="200"></label>
+    </div>
+  </section>
+
+  <section class="orga-sec">
+    <h2>Самооценка от 0 до 10</h2>
+    <p class="muted small">Честно, без скромности и без преувеличения. Рядом — оценка прошлой недели.</p>
+    <div class="skills-form">
+      {% for key, name, de in C.ORGA_SKILLS %}
+      {% set v = skills.get(key) %}
+      <label class="skill-row">
+        <span class="sk-name">{{ name }}<small>{{ de }}</small></span>
+        <input type="range" min="0" max="10" step="1" name="skill_{{ key }}" value="{{ v if v is not none else (prev_skills.get(key, 5)) }}" data-out="out-{{ key }}" aria-label="{{ name }}: оценка от 0 до 10">
+        <output id="out-{{ key }}">{{ v if v is not none else (prev_skills.get(key, 5)) }}</output>
+        <span class="sk-prev">{% if prev_skills.get(key) is not none %}было {{ prev_skills[key] }}{% endif %}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </section>
+
+  <div class="form-actions">
+    <button class="btn primary">Сохранить подготовку</button>
+    <span class="muted small">Неделя {{ week|d('dmy') }} – {{ wk_end|d('dmy') }}</span>
+  </div>
+</form>
+
+<aside>
+  <section class="panel">
+    <div class="panel-head"><h2>Самооценка по неделям</h2></div>
+    {% if history_skills %}
+    <div class="table-wrap"><table class="table skills-hist">
+      <thead><tr><th>Навык</th>{% for h, sk in history_skills[-8:] %}<th class="num"><a href="{{ url_for('main.orga', person=p['id'], week=h['week']) }}">{{ h['week']|d('short') }}</a></th>{% endfor %}</tr></thead>
+      <tbody>{% for key, name, de in C.ORGA_SKILLS %}
+        <tr><td>{{ name }}</td>{% for h, sk in history_skills[-8:] %}{% set v = sk.get(key) %}<td class="num sk-cell" {% if v is not none %}style="--v: {{ v }}"{% endif %}>{{ v if v is not none else '·' }}</td>{% endfor %}</tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <p class="foot-note" style="margin-top: 10px">Чем насыщеннее цвет клетки, тем выше оценка. Нажмите на неделю, чтобы открыть её ответы.</p>
+    {% else %}
+    <p class="empty">Здесь появится динамика оценок после первой подготовки.</p>
+    {% endif %}
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Как готовиться</h2></div>
+    <ul class="hint-list">
+      <li>Перед ORGA обновите цели и планы: год, месяц, неделю.</li>
+      <li>Ответьте на вопросы о прошедшей неделе и запишите меры с датой.</li>
+      <li>На следующей ORGA проверьте, выполнили ли меры.</li>
+      <li>С понедельника по среду форма открывается на прошлой неделе, с четверга — на текущей.</li>
+    </ul>
+  </section>
+</aside>
+</div>
+{% endblock %}

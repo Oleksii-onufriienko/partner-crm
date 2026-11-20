@@ -132,6 +132,95 @@ CREATE TABLE IF NOT EXISTS year_goals (
     PRIMARY KEY (person_id, year, month, metric)
 );
 
+-- Подготовка к ORGA (ORGA Checkliste): одна запись на человека и неделю, о которой отчёт
+CREATE TABLE IF NOT EXISTS orga_checks (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id       INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    week            TEXT NOT NULL,              -- понедельник недели, о которой отчёт
+    next_stufe      TEXT, next_stufe_date TEXT,
+    insight         TEXT,                       -- вывод из план/факта недели
+    went_well       TEXT, why_well TEXT,
+    improve         TEXT, measures TEXT, measures_when TEXT, controller TEXT,
+    prev_done       INTEGER,                    -- прошлые меры выполнены: 1 / 0 / NULL
+    prev_why        TEXT,
+    reward          TEXT, reward_for TEXT,
+    tables_ready    INTEGER NOT NULL DEFAULT 0,
+    next_plan_ready INTEGER NOT NULL DEFAULT 0,
+    potential_ready INTEGER NOT NULL DEFAULT 0,
+    skills          TEXT,                       -- JSON {навык: 0..10}
+    created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (person_id, week)
+);
+
+-- Reflexionsgespräch: разговор наставника с партнёром (AK1)
+CREATE TABLE IF NOT EXISTS reflections (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id    INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    date         TEXT NOT NULL,
+    place        TEXT,
+    people       TEXT,                          -- участники через запятую
+    satisfaction INTEGER,                       -- 1..5
+    goals_reached TEXT, improve TEXT,
+    results      TEXT,                          -- JSON итогов {показатель: число}
+    period_from  TEXT,
+    cp_clients   INTEGER, cp_clients_goal INTEGER,   -- Kontaktpotenzial Kundengewinnung: сейчас / цель
+    cp_partners  INTEGER, cp_partners_goal INTEGER,  -- Kontaktpotenzial Partnergewinnung
+    goal1 TEXT, goal2 TEXT, goal3 TEXT,
+    work_plan    TEXT,
+    intent       TEXT,
+    next_date    TEXT, next_time TEXT,
+    meeting_id   INTEGER,                       -- встреча в планере наставника
+    created_by   INTEGER,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_reflections_person ON reflections(person_id, date);
+
+-- Старт новичка: отмеченные шаги и темы обучения
+CREATE TABLE IF NOT EXISTS onboarding (
+    person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    step        TEXT NOT NULL,                  -- ключ шага или topic1..topic7
+    date        TEXT,
+    result      TEXT,
+    note        TEXT,
+    updated_by  INTEGER,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (person_id, step)
+);
+
+-- Звонки из режима обзвона
+CREATE TABLE IF NOT EXISTS calls (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id    INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    contact_id  INTEGER REFERENCES contacts(id) ON DELETE SET NULL,
+    date        TEXT NOT NULL,
+    time        TEXT,
+    result      TEXT NOT NULL,
+    created_by  INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_calls_owner ON calls(owner_id, date);
+
+-- Цели (Zukunftsplanung) — один JSON на человека
+CREATE TABLE IF NOT EXISTS future_goals (
+    person_id   INTEGER PRIMARY KEY REFERENCES persons(id) ON DELETE CASCADE,
+    data        TEXT NOT NULL,
+    updated_by  INTEGER,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Musterwoche: типовые блоки недели
+CREATE TABLE IF NOT EXISTS muster_blocks (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    weekday     INTEGER NOT NULL,               -- 0 = понедельник
+    start       TEXT NOT NULL,
+    end         TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    title       TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_muster_person ON muster_blocks(person_id, weekday);
+
 -- План (Soll) и ручной факт (Ist) по неделям. week = понедельник недели.
 -- ist = NULL: для автоматических показателей факт считается из встреч и сделок.
 CREATE TABLE IF NOT EXISTS week_plan (

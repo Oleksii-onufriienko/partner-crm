@@ -1,0 +1,65 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, team_tabs with context %}
+{% block title %}Наставничество{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Наставничество</h1>
+    <p class="sub">Кто подготовился к ORGA, где люди оценивают себя ниже всего и когда следующий Reflexionsgespräch. Сверху — кто не подготовился и у кого оценки ниже.</p>
+  </div>
+</header>
+{{ team_tabs('main.team_coaching', p['id']) }}
+
+{% if has_branch %}
+<div class="toolbar">
+  <span class="grow"></span>
+  <nav class="tabs" aria-label="Кого показывать">
+    <a href="{{ url_for('main.team_coaching', person=p['id'], scope='direct') }}"{% if scope == 'direct' %} aria-current="true"{% endif %}>Первая линия</a>
+    <a href="{{ url_for('main.team_coaching', person=p['id'], scope='branch') }}"{% if scope == 'branch' %} aria-current="true"{% endif %}>Вся структура</a>
+  </nav>
+</div>
+{% endif %}
+
+{% if rows %}
+<section class="panel flush">
+  <div class="table-wrap">
+  <table class="table coach-table">
+    <thead><tr>
+      <th>Партнёр</th><th>ORGA</th>
+      {% for key, name, de in C.ORGA_SKILLS %}<th class="sk-h" title="{{ de }}"><span>{{ name }}</span></th>{% endfor %}
+      <th>Разговоры</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr>
+        <td class="name-cell"><a class="row-link nowrap" href="{{ url_for('main.person', pid=r.p['id']) }}">{{ r.p|fullname }}</a><span class="sub">{{ r.p['stufe'] }}{% if r.weakest %}, слабее всего: {{ r.weakest[0][0]|label(C.ORGA_SKILLS)|lower }}{% endif %}</span></td>
+        <td class="nowrap">{% if r.orga_week_done %}<a class="chip ok" href="{{ url_for('main.orga', person=r.p['id'], week=r.orga['week']) }}">Готов</a>
+          {% elif r.orga %}<a class="chip warn" href="{{ url_for('main.orga', person=r.p['id'], week=r.orga['week']) }}">Последний раз {{ r.orga['week']|d('short') }}</a>
+          {% else %}<span class="chip outline">Ни разу</span>{% endif %}</td>
+        {% for key, name, de in C.ORGA_SKILLS %}
+          {% set v = r.skills.get(key) %}{% set b = r.before.get(key) %}
+          <td class="num sk-cell"{% if v is not none %} style="--v: {{ v }}"{% endif %} title="{{ name }}{% if v is not none %}: {{ v }}{% if b is not none %}, неделей раньше {{ b }}{% endif %}{% endif %}">
+            {% if v is none %}<span class="muted">·</span>{% else %}{{ v }}{% if b is not none and b != v %}<small class="{{ 'up' if v > b else 'down' }}">{{ '↑' if v > b else '↓' }}</small>{% endif %}{% endif %}</td>
+        {% endfor %}
+        <td class="nowrap">
+          {% if r.refl_next %}<span class="small{{ ' warn-text' if r.refl_next < today() }}">следующий {{ r.refl_next|d('short') }}</span><br>{% endif %}
+          {% if r.refl_last %}<a href="{{ url_for('main.reflection', pid=r.p['id'], rid=r.refl_last['id']) }}" class="small">был {{ r.refl_last['date']|d('short') }}</a>{% else %}<span class="muted small">ещё не было</span>{% endif %}
+          <br><a class="small" href="{{ url_for('main.reflection', pid=r.p['id']) }}">Провести</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr>
+      <td class="nowrap">Среднее</td><td></td>
+      {% for key, name, de in C.ORGA_SKILLS %}{% set v = team_avg[key] %}<td class="num sk-cell"{% if v is not none %} style="--v: {{ v }}"{% endif %}>{{ v|num(1) if v is not none else '·' }}</td>{% endfor %}
+      <td></td>
+    </tr></tfoot>
+  </table>
+  </div>
+</section>
+<p class="foot-note">Оценки — последняя самооценка партнёра перед ORGA (0–10), стрелка — изменение к прошлой подготовке. Чем насыщеннее цвет клетки, тем выше оценка.
+«Готов» — подготовка заполнена за прошлую или текущую неделю. Следующий Reflexionsgespräch назначается в самом разговоре и попадает в ваш планер.</p>
+{% else %}
+<section class="panel"><p class="empty">В {{ 'первой линии' if scope == 'direct' else 'структуре' }} пока никого нет. Когда партнёры появятся, здесь будет их подготовка к ORGA и разговоры с ними.</p></section>
+{% endif %}
+{% endblock %}

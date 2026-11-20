@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_ui.html' import icon, person_select with context %}
+{% from '_ui.html' import icon, person_select, plan_tabs with context %}
 {% block title %}План и факт{% endblock %}
 {% macro n(x, ke=false) -%}{% if x is none %}<span class="muted">—</span>{% else %}{{ x|num(1 if ke else 0) }}{% endif %}{%- endmacro %}
 {% block content %}
@@ -17,6 +17,7 @@
     {% if scope == 'me' %}<a class="btn primary" href="{{ url_for('main.plan_edit', person=p['id'], month=mkey) }}">{{ icon('edit') }}Заполнить план и факт</a>{% endif %}
   </div>
 </header>
+{{ plan_tabs('main.plan', p['id']) }}
 
 <form class="toolbar" method="get">
   <input type="hidden" name="person" value="{{ p['id'] }}">

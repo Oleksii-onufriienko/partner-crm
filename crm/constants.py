@@ -83,6 +83,7 @@ STAGES = [
     ("seminar", "Приглашение на семинар / Info", "Семинар"),
     ("recruiting", "Карьерный разговор", "Карьера"),
     ("training", "Обучение / тим-митинг", "Обучение"),
+    ("reflection", "Reflexionsgespräch", "Reflexion"),
     ("other", "Другое", "Другое"),
 ]
 # Этапы, которые показываем в воронке статистики
@@ -185,6 +186,8 @@ WEAK_RULES = [
      "N и более встреч уже прошли, но всё ещё стоят как «Запланирована»."),
     ("no_week_plan", "Не заполнен план на эту неделю", None, None, None, None,
      "В «План/факт» на текущую неделю не введено ни одного числа плана."),
+    ("no_orga", "Не подготовился к ORGA за прошлую неделю", None, None, None, None,
+     "За прошлую неделю не заполнена «Подготовка к ORGA» (вопросы ORGA Checkliste и самооценка)."),
 ]
 WEAK_RULE_KEYS = [r[0] for r in WEAK_RULES]
 
@@ -199,3 +202,78 @@ def label(options, key):
 
 def keys(options):
     return [o[0] for o in options]
+
+
+# ---------------------------------------------------------------- наставничество (пункт Б)
+# Самооценка перед ORGA по шкале 0–10 (ORGA Checkliste, Erfolgsjournal)
+ORGA_SKILLS = [
+    ("service", "Сервис", "Service"),
+    ("lead", "Ведение партнёров", "Partnerführung"),
+    ("planning", "Планирование", "Planung"),
+    ("contact", "Контакт", "Kontakt"),
+    ("evidence", "Доказательства", "Evidenz"),
+    ("analysis", "Финанализ", "Finanzanalyse"),
+    ("referrals", "Рекомендации", "Empfehlungen"),
+    ("recruit", "Привлечение партнёров", "Anwerbung"),
+    ("consult", "Бератунг", "Beratung"),
+]
+ORGA_SKILL_KEYS = [s[0] for s in ORGA_SKILLS]
+
+# Участники Reflexionsgespräch (AK1, с. 37 и 41)
+REFLECTION_PEOPLE = [("partner", "Супруг(а)", "Lebenspartner/-in"), ("coach", "Наставник", "Coach"),
+                     ("teamlead", "Руководитель команды", "Teamleiter"), ("dleiter", "D-Leiter", "D-Leiter")]
+# Куда человек хочет прийти (AK1: Nebenberuf → Hauptberuf → VB → Unternehmer im Unternehmen)
+CAREER_INTENTS = [("side", "Побочная деятельность", "Nebenberuf"), ("main", "Основная работа", "Hauptberuf"),
+                  ("vb", "Vermögensberater", "VB"),
+                  ("entrepreneur", "Предприниматель в компании", "Unternehmer im Unternehmen")]
+# Итоги, которые сверяются в разговоре (AK1: Aktivitäten / Ergebnis / Ziele)
+REFLECTION_RESULTS = [
+    ("analyses", "Финанализы", "Analysen"), ("consults", "Бератунги", "Beratungen"),
+    ("referrals", "Рекомендации", "Empfehlungen"), ("clients", "Новые клиенты", "Kunden"),
+    ("partners", "Новые партнёры", "Partner"), ("info", "Участники Info", "Info-Teilnehmer"),
+    ("vm", "Новые VM", "VM"), ("units", "Единицы", "Einheiten"),
+]
+
+# Старт новичка (AK1: Ausbildungsplanung, Marktpotenziale, Reflexionsgespräche).
+# ключ, подпись, термин, как отмечается: manual — вручную с датой; exam — дата и результат;
+# auto — считается сам из CRM (можно отметить и вручную).
+ONBOARDING_STEPS = [
+    ("info", "Был на Karriere-Info", "Info besucht", "manual"),
+    ("starter", "Был на Startertreffen", "Startertreffen besucht", "manual"),
+    ("ak1", "Проработал AK1", "AK 1 ausgearbeitet", "manual"),
+    ("mp20", "Marktpotenzial: 20 человек", "Marktpotenzial", "auto"),
+    ("fuersprecher", "Записал 6 Fürsprecher", "Ihre Fürsprecher", "auto"),
+    ("fs_talks", "Провёл 3 Fürsprechergespräche", "Fürsprechergespräche", "auto"),
+    ("first_analysis", "Первый финанализ", "erste Analyse", "auto"),
+    ("first_client", "Первый клиент", "erster Kunde", "auto"),
+    ("refl1", "Reflexionsgespräch 1", "Reflexionsgespräch 1", "auto"),
+    ("vm_exam", "Экзамен VM", "VM-Prüfung", "exam"),
+    ("refl2", "Reflexionsgespräch 2", "Reflexionsgespräch 2", "auto"),
+    ("vba_exam", "Экзамен VBA (IDD)", "VBA-Prüfung", "exam"),
+]
+ONBOARDING_KEYS = [s[0] for s in ONBOARDING_STEPS]
+ONBOARDING_TOPICS = 7          # «Themen 1.–7.» в Ausbildungsplanung
+ONBOARDING_STUCK_DAYS = 21     # нет нового шага столько дней — новичок «застрял»
+NEWCOMER_STUFEN = ("VM", "VBAS", "VBAK")
+
+# ---------------------------------------------------------------- ежедневная работа (пункт В)
+# Результат звонка в режиме обзвона (Tages-Statistik: Telefongespräche / Termine)
+CALL_RESULTS = [
+    ("no_answer", "Не дозвонился", "nicht erreicht"),
+    ("appointment", "Термин", "Termin"),
+    ("callback", "Перезвонить", "Rückruf"),
+    ("no_chance", "Нет шансов", "kein Interesse"),
+]
+CALL_REACHED = ("appointment", "callback", "no_chance")   # разговор состоялся
+CALLS_PER_DAY = 10             # «Dein minimales Ziel des Tages: 10 neue Kontakte und 3 Termine»
+TERMINE_PER_DAY = 3
+
+# Musterwoche (AK1, с. 10): виды блоков
+MUSTER_KINDS = [
+    ("vb", "VM/VB-работа", "VM/VB-Aktivitäten"),
+    ("team", "Тим-митинг", "Teammeeting"),
+    ("training", "Обучение", "Schulungen"),
+    ("job", "Основная работа", "Arbeitszeiten (Hauptberuf)"),
+    ("hobby", "Хобби, спорт", "Hobbys"),
+    ("family", "Семья, друзья", "Familie, Freunde"),
+]

@@ -15,6 +15,7 @@
 {%- elif name == 'chev-l' -%}<path d="m14.5 6-6 6 6 6"/>
 {%- elif name == 'chev-r' -%}<path d="m9.5 6 6 6-6 6"/>
 {%- elif name == 'edit' -%}<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/>
+{%- elif name == 'check' -%}<path d="M5 12.5l4.5 4.5L19 7.5"/>
 {%- endif -%}
 </svg>
 {%- endmacro %}
@@ -79,7 +80,7 @@
 
 {% macro team_tabs(active, pid) -%}
 <nav class="tabs team-tabs" aria-label="Разделы команды">
-{% for ep, title in [('main.team', 'Структура'), ('main.candidates', 'Кандидаты'), ('main.year_plan', 'Годовой план'), ('main.career', 'Карьера')] %}
+{% for ep, title in [('main.team', 'Структура'), ('main.candidates', 'Кандидаты'), ('main.team_start', 'Старт новичков'), ('main.team_coaching', 'Наставничество'), ('main.year_plan', 'Годовой план'), ('main.career', 'Карьера')] %}
   <a href="{{ url_for(ep, person=pid) }}"{% if ep == active %} aria-current="page"{% endif %}>{{ title }}</a>
 {% endfor %}
 </nav>
@@ -124,4 +125,12 @@
 {% endfor %}
 </div>
 {% endif %}
+{%- endmacro %}
+
+{% macro plan_tabs(active, pid) -%}
+<nav class="tabs team-tabs" aria-label="Разделы планирования">
+{% for ep, title in [('main.plan', 'Неделя: план и факт'), ('main.orga', 'Подготовка к ORGA'), ('main.goals', 'Цели'), ('main.muster', 'Musterwoche'), ('main.calculator', 'Калькулятор дохода')] %}
+  <a href="{{ url_for(ep, person=pid) }}"{% if ep == active %} aria-current="page"{% endif %}>{{ title }}</a>
+{% endfor %}
+</nav>
 {%- endmacro %}

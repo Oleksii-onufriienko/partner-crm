@@ -1,7 +1,8 @@
 """План/факт (Soll/Ist) по неделям — как Wochenplanung в Erfolgsjournal.
 
 Факт по встречам и сделкам считается автоматически:
-  контакты для первого термина = проведённые встречи этапа «Холодный контакт» / «Контактный разговор»;
+  контакты для первого термина = проведённые встречи этапа «Холодный контакт» / «Контактный разговор»
+    и звонки из режима обзвона, где разговор состоялся (термин, перезвонить, нет шансов);
   договорено … = встречи этого этапа, созданные (назначенные) на этой неделе;
   проведено … = встречи этого этапа со статусом «Проведена» и датой на этой неделе;
   финанализы = проведённые встречи этапа «Анализ»;
@@ -74,6 +75,11 @@ def auto_facts(ids, weeks):
                              AND date(created_at) BETWEEN ? AND ?""", [*ids, s, e]):
         if r["stage"] in AGREED_STAGE:
             add(r["owner_id"], r["d"], AGREED_STAGE[r["stage"]])
+    # Звонки из режима обзвона, где разговор состоялся, — тоже контакты для первого термина
+    reached = ",".join(f"'{k}'" for k in C.CALL_REACHED)
+    for r in query(f"""SELECT owner_id, date FROM calls WHERE owner_id IN ({mk}) AND result IN ({reached})
+                       AND date BETWEEN ? AND ?""", [*ids, s, e]):
+        add(r["owner_id"], r["date"], "fa_contacts")
     for r in query(f"""SELECT c.owner_id, d.date, d.ke, d.source FROM deals d
                        JOIN contacts c ON c.id = d.contact_id
                        WHERE c.owner_id IN ({mk}) AND d.date BETWEEN ? AND ?""", [*ids, s, e]):

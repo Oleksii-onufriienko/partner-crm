@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, plan_tabs with context %}
+{% block title %}Калькулятор дохода{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Калькулятор дохода</h1>
+    <p class="sub">Persönlicher Plan из AK1 наоборот: сколько хотите зарабатывать — и сколько для этого нужно единиц, клиентов, бератунгов, финанализов, терминов и контактов. Квоты — из {{ 'ваших' if p['id'] == g.user['id'] else 'его' }} цифр за последние {{ weeks_n }} недель.</p>
+  </div>
+</header>
+{{ plan_tabs('main.calculator', p['id']) }}
+
+<form method="get" class="calc">
+  <input type="hidden" name="person" value="{{ p['id'] }}">
+  <div class="grid-2">
+  <section class="panel">
+    <div class="panel-head"><h2>Цель</h2></div>
+    <div class="form-grid">
+      <label class="field"><span class="field-label">Хочу зарабатывать, € в месяц</span>
+        <input type="text" inputmode="decimal" name="income" value="{{ '%g'|format(income) }}">
+        {% if goals.get('fin_month_this') %}<span class="field-hint">Цель на этот год в «Целях»: {{ goals['fin_month_this']|eur }} в месяц.</span>{% endif %}</label>
+      <label class="field"><span class="field-label">€ за единицу</span>
+        <input type="text" inputmode="decimal" name="rate" value="{{ '%g'|format(rate) }}">
+        <span class="field-hint">{{ p['stufe'] }}: по ступени {{ C.STUFE_DEFAULT_COEF.get(p['stufe'], 1)|num(2) }} €. VM — 1, 2 или 3 €.</span></label>
+      <label class="field"><span class="field-label">Сколько часов в неделю готов работать</span>
+        <input type="text" inputmode="decimal" name="hours" value="{{ '%g'|format(hours) if hours else '' }}" placeholder="например, 15"></label>
+    </div>
+    <h3 class="calc-h3">Квоты</h3>
+    <ul class="calc-quotas">
+      {% for key, label, dflt, num, den in quotas %}
+      {% set own = q[key] %}
+      <li><label><input type="text" inputmode="decimal" name="q_{{ key }}" value="{{ ('%g'|format(used[key]))|replace('.', ',') }}" aria-label="{{ label }}"><span>{{ label }}</span></label>
+        <small class="{{ 'own' if own.own else 'dflt' }}">{% if own.own %}ваши цифры: {{ own.num|num(0) }} к {{ own.den|num(0) }}{% else %}по умолчанию: {{ own.why }} ({{ own.num|num(0) }} к {{ own.den|num(0) }}){% endif %}</small></li>
+      {% endfor %}
+    </ul>
+    <div class="form-actions"><button class="btn primary">Пересчитать</button>
+      <a class="btn ghost" href="{{ url_for('main.calculator', person=p['id']) }}">Сбросить</a></div>
+  </section>
+
+  <section class="panel calc-result" aria-live="polite">
+    <div class="panel-head"><h2>Что для этого нужно</h2><span class="muted small">{{ income|eur }} в месяц</span></div>
+    <table class="table calc-table">
+      <thead><tr><th>Показатель</th><th class="num">в месяц</th><th class="num">в неделю</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr{% if r.key == 'units' %} class="calc-units"{% endif %}><td>{{ r.label }}</td><td class="num">{{ r.month|num(1 if r.month < 10 else 0) }}</td><td class="num"><b>{{ r.week|num(1 if r.week < 10 else 0) }}</b></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% set contacts = rows[-1].week %}
+    <p class="calc-day">Это примерно <b>{{ (contacts / 5)|round(1)|num(1) }}</b> разговора с людьми в рабочий день{% if hours %} при {{ '%g'|format(hours) }} ч в неделю{% endif %}. Ориентир Tages-Statistik — {{ C.CALLS_PER_DAY }} разговоров и {{ C.TERMINE_PER_DAY }} термина в день.</p>
+  </section>
+  </div>
+</form>
+
+<form method="post" action="{{ url_for('main.calculator_apply') }}" class="panel apply-plan">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="person" value="{{ p['id'] }}">
+  <input type="hidden" name="income" value="{{ income }}">
+  <input type="hidden" name="rate" value="{{ rate }}">
+  {% for qq in quotas %}{% set key = qq[0] %}<input type="hidden" name="q_{{ key }}" value="{{ used[key] }}">{% endfor %}
+  <div>
+    <h2>Перенести в план</h2>
+    <p class="muted small">Цифры «в неделю» станут планом на каждую неделю месяца: контакты, первые термины, финанализы, бератунги, новые клиенты и KE. Факт и остальные строки плана не меняются.</p>
+  </div>
+  <label class="field"><span class="field-label">Месяц</span>
+    <select name="month">{% for m in months %}<option value="{{ m.strftime('%Y-%m') }}">{{ month_name(m) }}</option>{% endfor %}</select></label>
+  <button class="btn primary">Заполнить план</button>
+</form>
+<p class="foot-note">Как считается: единицы = доход ÷ € за единицу; клиенты = единицы ÷ единиц с клиента; дальше по квотам вверх по воронке до контактов. В месяце {{ '%.2f'|format(52 / 12)|replace('.', ',') }} недели. Erfolgsprovision и Differenzprovision здесь не учитываются.</p>
+{% endblock %}

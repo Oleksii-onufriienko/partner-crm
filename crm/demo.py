@@ -209,3 +209,152 @@ def add_growth(db, ids, rnd, today=None, created_by=None, deals=True):
             goal(p["id"], "cand_indirect", allm, 3)
             goal(p["id"], "vm_indirect", (3, 6, 9, 12), 1)
     return counts
+
+
+# ---------------------------------------------------------------- наставничество и ежедневная работа (демо)
+ORGA_WELL = ["Провёл все запланированные первые термины", "Договорился о 4 терминах за один вечер",
+             "Получил 6 рекомендаций после бератунга", "Взял на Info двух кандидатов", "Закрыл первую сделку по BU"]
+ORGA_WHY = ["Звонил по плану каждый вечер", "Готовился к разговору по AK1", "Сразу просил рекомендации",
+            "Работал по Musterwoche"]
+ORGA_IMPROVE = ["Больше звонков в начале недели", "Отмечать итоги встреч сразу", "Просить рекомендации на каждом термине",
+                "Чаще звать на Karriere-Info"]
+ORGA_MEASURES = ["Пн и Ср 18–20 — обзвон по Marktpotenzial", "После каждой встречи — итог в CRM в тот же день",
+                 "Записать 10 новых людей в Marktpotenzial", "Пригласить 2 человек на Info в четверг"]
+REFL_GOALS = ["10 разговоров в день по Marktpotenzial", "3 финанализа в неделю", "2 человека на Karriere-Info",
+              "Сдать экзамен VM", "Первая сделка до конца месяца", "Довести Marktpotenzial до 50 человек"]
+MUSTER = [  # (дни, с, до, вид, подпись)
+    ((0, 1, 2, 3, 4), "08:00", "16:30", "job", "Основная работа"),
+    ((0, 2), "18:00", "20:30", "vb", "Звонки и термины"),
+    ((1,), "19:00", "21:00", "team", "Тим-митинг"),
+    ((3,), "18:30", "21:00", "vb", "Финанализы"),
+    ((5,), "10:00", "13:00", "vb", "Бератунги"),
+    ((4,), "18:00", "19:30", "hobby", "Спорт"),
+    ((6,), "11:00", "18:00", "family", "Семья"),
+]
+
+
+def add_coaching(db, ids, rnd, today=None, created_by=None):
+    """Демо для пунктов Б и В: ORGA за 6 недель, Reflexionsgespräche, старт новичков, звонки, цели, Musterwoche.
+    Повторный запуск всё пересоздаёт."""
+    import json as _json
+    today = today or dt.date.today()
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    for table, col in (("orga_checks", "person_id"), ("reflections", "person_id"), ("onboarding", "person_id"),
+                       ("calls", "owner_id"), ("future_goals", "person_id"), ("muster_blocks", "person_id")):
+        db.execute(f"DELETE FROM {table} WHERE {col} IN ({marks})", ids)
+    people = {r[0]: {"id": r[0], "parent": r[1], "stufe": r[2], "start": r[3], "coef": r[4]} for r in db.execute(
+        f"SELECT id, parent_id, stufe, start_date, coef FROM persons WHERE id IN ({marks})", ids)}
+    keys = ["service", "lead", "planning", "contact", "evidence", "analysis", "referrals", "recruit", "consult"]
+    counts = {"orga": 0, "reflections": 0, "calls": 0}
+    monday = today - dt.timedelta(days=today.weekday())
+    for p in people.values():
+        # ORGA: 6 недель, у части людей прошлой недели нет — так видно слабое место
+        base = {k: rnd.randint(3, 7) for k in keys}
+        skip_last = rnd.random() < 0.25
+        for i in range(6, 0, -1):
+            if i == 1 and skip_last:
+                continue
+            if rnd.random() < 0.15:
+                continue
+            for k in keys:
+                base[k] = max(0, min(10, base[k] + rnd.choice([-1, 0, 0, 1, 1])))
+            week = monday - dt.timedelta(days=7 * i)
+            db.execute("""INSERT INTO orga_checks (person_id, week, insight, went_well, why_well, improve, measures,
+                              measures_when, controller, prev_done, reward, reward_for, tables_ready, next_plan_ready,
+                              potential_ready, skills, created_at, updated_at)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (p["id"], week.isoformat(), rnd.choice(["Первых терминов меньше плана — мало звонков",
+                                                               "План выполнен, кроме бератунгов",
+                                                               "Финанализов больше плана"]),
+                        rnd.choice(ORGA_WELL), rnd.choice(ORGA_WHY), rnd.choice(ORGA_IMPROVE), rnd.choice(ORGA_MEASURES),
+                        (week + dt.timedelta(days=rnd.randint(8, 11))).isoformat(), "Наставник",
+                        rnd.choice([1, 1, 0]), rnd.choice(["Кино", "Ужин в ресторане", "Свободный вечер"]),
+                        "За выполненный план недели", 1, rnd.choice([0, 1]), rnd.choice([0, 1]), _json.dumps(base),
+                        (week + dt.timedelta(days=7)).isoformat() + " 08:00:00",
+                        (week + dt.timedelta(days=7)).isoformat() + " 08:00:00"))
+            counts["orga"] += 1
+        # Reflexionsgespräche с наставником: каждые 4–6 недель от входа
+        start = dt.date.fromisoformat(p["start"]) if p["start"] else today - dt.timedelta(days=120)
+        d = max(start, today - dt.timedelta(days=170)) + dt.timedelta(days=rnd.randint(25, 40))
+        n = 0
+        while d < today - dt.timedelta(days=3) and n < 4:
+            nxt = d + dt.timedelta(days=rnd.randint(28, 42))
+            goals = rnd.sample(REFL_GOALS, 3)
+            res = {"analyses": rnd.randint(2, 9), "consults": rnd.randint(1, 6), "referrals": rnd.randint(3, 15),
+                   "clients": rnd.randint(0, 4), "partners": rnd.randint(0, 1), "info": rnd.randint(0, 3),
+                   "vm": rnd.randint(0, 1), "units": rnd.randint(20, 160)}
+            db.execute("""INSERT INTO reflections (person_id, date, place, people, satisfaction, goals_reached, improve,
+                              results, period_from, cp_clients, cp_clients_goal, cp_partners, cp_partners_goal,
+                              goal1, goal2, goal3, work_plan, intent, next_date, next_time, created_by)
+                          VALUES (?, ?, 'Офис', 'coach', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '18:00', ?)""",
+                       (p["id"], d.isoformat(), rnd.randint(3, 5), rnd.choice(["Да, две из трёх", "Частично", "Да, все"]),
+                        rnd.choice(ORGA_IMPROVE), _json.dumps(res), (d - dt.timedelta(days=35)).isoformat(),
+                        rnd.randint(25, 80), rnd.choice([60, 80, 100]), rnd.randint(1, 8), rnd.choice([10, 15, 20]),
+                        *goals, "Два вечера в неделю — звонки, суббота — бератунги.",
+                        rnd.choice(["side", "side", "main", "vb"]), nxt.isoformat() if nxt > today else None,
+                        p["parent"] if p["parent"] else created_by))
+            counts["reflections"] += 1
+            n += 1
+            d = nxt
+        # Старт: ручные шаги и темы обучения у тех, кто ещё в Nebenberuf
+        if p["stufe"] in ("VM", "VBAS", "VBAK"):
+            day = start
+            for step in ("info", "starter", "ak1"):
+                day = day + dt.timedelta(days=rnd.randint(2, 12))
+                if day < today and rnd.random() < 0.85:
+                    db.execute("INSERT INTO onboarding (person_id, step, date, updated_by) VALUES (?, ?, ?, ?)",
+                               (p["id"], step, day.isoformat(), created_by))
+            if p["stufe"] != "VM" or rnd.random() < 0.3:
+                db.execute("INSERT INTO onboarding (person_id, step, date, result, updated_by) VALUES (?, 'vm_exam', ?, 'passed', ?)",
+                           (p["id"], min(today, start + dt.timedelta(days=rnd.randint(40, 90))).isoformat(), created_by))
+            if p["stufe"] == "VBAK" and rnd.random() < 0.7:
+                db.execute("INSERT INTO onboarding (person_id, step, date, result, updated_by) VALUES (?, 'vba_exam', ?, 'passed', ?)",
+                           (p["id"], min(today, start + dt.timedelta(days=rnd.randint(120, 220))).isoformat(), created_by))
+            for i, topic in enumerate(rnd.sample(["Kontaktpyramide", "Fürsprechergespräch", "Finanzanalyse",
+                                                  "Terminvereinbarung", "Empfehlungen", "Altersvorsorge"], rnd.randint(1, 4)), 1):
+                db.execute("INSERT INTO onboarding (person_id, step, date, note, updated_by) VALUES (?, ?, ?, ?, ?)",
+                           (p["id"], f"topic{i}", min(today, start + dt.timedelta(days=7 * i)).isoformat(), topic, created_by))
+        # Fürsprechergespräche — проведённые встречи этапа advocate в первые недели
+        hot = [r[0] for r in db.execute("SELECT id FROM contacts WHERE owner_id = ? AND temperature IN ('very_hot', 'hot') LIMIT 6",
+                                        (p["id"],))]
+        for i, cid in enumerate(hot[:rnd.randint(1, 4)]):
+            md = start + dt.timedelta(days=5 + 4 * i)
+            if md < today:
+                db.execute("""INSERT INTO meetings (owner_id, contact_id, date, time, duration_min, format, stage, status,
+                                                    created_by, created_at)
+                              VALUES (?, ?, ?, '18:00', 60, 'offline', 'advocate', 'done', ?, ?)""",
+                           (p["id"], cid, md.isoformat(), p["id"], (md - dt.timedelta(days=3)).isoformat() + " 12:00:00"))
+        # Звонки за последние 10 дней
+        contacts = [r[0] for r in db.execute("SELECT id FROM contacts WHERE owner_id = ? AND status != 'no_chance'", (p["id"],))]
+        if contacts:
+            for back in range(10, -1, -1):
+                day = today - dt.timedelta(days=back)
+                if day.weekday() == 6:
+                    continue
+                for _ in range(rnd.randint(0, 6 if p["stufe"] == "VM" else 10)):
+                    res = rnd.choice(["no_answer"] * 4 + ["callback"] * 3 + ["appointment"] * 2 + ["no_chance"])
+                    db.execute("""INSERT INTO calls (owner_id, contact_id, date, time, result, created_by)
+                                  VALUES (?, ?, ?, ?, ?, ?)""",
+                               (p["id"], rnd.choice(contacts), day.isoformat(),
+                                f"{rnd.randint(17, 20):02d}:{rnd.choice(['05', '20', '35', '50'])}", res, p["id"]))
+                    counts["calls"] += 1
+        # Цели и Musterwoche
+        income = rnd.choice([1000, 1500, 2000, 3000]) if p["stufe"] in ("VM", "VBAS", "VBAK") else rnd.choice([5000, 7000, 9000])
+        goals = {"fin_month_this": income, "fin_year_this": income * 12, "fin_month_next": round(income * 1.6),
+                 "fin_year_next": round(income * 1.6) * 12, "fin_month_five": income * 4, "fin_year_five": income * 48,
+                 "mat_this": rnd.choice(["Новый ноутбук", "Отпуск у моря"]), "mat_next": "Машина", "mat_five": "Своя квартира",
+                 "pers_this": "Спорт два раза в неделю", "pers_next": "Больше времени с семьёй", "pers_five": "Финансовая свобода",
+                 "rewards": [{"what": "Ужин в ресторане", "when": (today + dt.timedelta(days=20)).isoformat(),
+                              "why": "План месяца"}],
+                 "motto": rnd.choice(["Мой результат — моя цель", "На меня можно положиться"])}
+        db.execute("INSERT INTO future_goals (person_id, data, updated_by) VALUES (?, ?, ?)",
+                   (p["id"], _json.dumps(goals, ensure_ascii=False), created_by))
+        for days, s, e, kind, title in MUSTER:
+            if kind == "job" and p["stufe"] not in ("VM", "VBAS", "VBAK"):
+                continue
+            for wd in days:
+                db.execute("""INSERT INTO muster_blocks (person_id, weekday, start, end, kind, title)
+                              VALUES (?, ?, ?, ?, ?, ?)""", (p["id"], wd, s, e, kind, title))
+    return counts

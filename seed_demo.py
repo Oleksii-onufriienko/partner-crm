@@ -143,13 +143,14 @@ for pid, (_, per_week) in profiles.items():
                        (pid, day.isoformat(), pid))
         day += dt.timedelta(days=1)
 
-from crm.demo import add_growth, add_week_plans  # noqa: E402
+from crm.demo import add_coaching, add_growth, add_week_plans  # noqa: E402
 
 for pid, (_, per_week) in profiles.items():
     if per_week:
         add_week_plans(db, pid, rnd, scale=1.0 if pid in (viktor, irina, dmitri) else 0.5, today=today)
 
 add_growth(db, list(profiles), rnd, today=today, created_by=viktor)
+add_coaching(db, list(profiles), rnd, today=today, created_by=viktor)
 db.commit()
 print(f"Демо-база создана: {path}")
 print("Вход: admin@demo.local / demo12345")

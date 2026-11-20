@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_ui.html' import icon, meeting_line, pyramid, temp, status_chip, career_steps with context %}
+{% from '_ui.html' import icon, meeting_line, pyramid, temp, status_chip, career_steps, progress with context %}
 {% block title %}Сегодня{% endblock %}
 {% block content %}
 {% set u = p %}
@@ -74,6 +74,14 @@
       {% endif %}
     </section>
 
+    {% if not orga_done %}
+    <section class="panel orga-nudge">
+      <div><h2>Подготовка к ORGA</h2>
+        <p class="small">За неделю с {{ orga_week|d('dmy') }} ещё не заполнена: вопросы ORGA Checkliste и самооценка.</p></div>
+      <a class="btn" href="{{ url_for('main.orga', person=p['id']) }}">Подготовиться</a>
+    </section>
+    {% endif %}
+
     <section class="panel">
       <div class="panel-head"><h2>До следующей ступени</h2><a href="{{ url_for('main.person', pid=p['id']) }}#career">Подробно</a></div>
       {{ career_steps(steps, compact=true) }}
@@ -94,6 +102,11 @@
 
     <section class="panel">
       <div class="panel-head"><h2>Кому позвонить</h2><a href="{{ url_for('main.contacts', sort='next') }}">Все напоминания</a></div>
+      <div class="dash-calls">
+        <span>Сегодня <b>{{ calls_stats.reached }}</b> из {{ C.CALLS_PER_DAY }} разговоров, <b>{{ calls_stats.appointments }}</b> из {{ C.TERMINE_PER_DAY }} терминов</span>
+        <a class="btn small primary" href="{{ url_for('main.calls', person=p['id']) }}">{{ icon('phone') }}Обзвон</a>
+      </div>
+      {{ progress((100 * calls_stats.reached / C.CALLS_PER_DAY)|round|int, calls_stats.reached >= C.CALLS_PER_DAY, 'Разговоры сегодня') }}
       {% if followups %}
       <ul class="item-list">
         {% for c in followups %}

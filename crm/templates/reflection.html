@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon with context %}
+{% block title %}Reflexionsgespräch — {{ p|fullname }}{% endblock %}
+{% macro fv(key, default='') -%}{{ v.get(key) if v.get(key) is not none else default }}{%- endmacro %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.person', pid=p['id']) }}">{{ p|fullname }}</a></p>
+    <h1>Reflexionsgespräch {{ number }}</h1>
+    <p class="sub">Партнёр: {{ p|fullname }}, {{ p['stufe'] }}. Форма AK1: что получилось, где расти, три главные цели до следующего разговора.</p>
+  </div>
+  {% if row %}
+  <div class="actions">
+    <form method="post" action="{{ url_for('main.reflection_delete', pid=p['id'], rid=row['id']) }}" class="inline" data-confirm="Удалить этот разговор? Встреча в планере тоже удалится, если ещё не прошла.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn ghost danger">Удалить</button>
+    </form>
+  </div>
+  {% endif %}
+</header>
+
+<form method="post" class="refl">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="grid-2">
+  <div>
+    <section class="panel">
+      <div class="form-grid">
+        <label class="field"><span class="field-label">Дата разговора</span><input type="date" name="date" required value="{{ fv('date') }}"></label>
+        <label class="field"><span class="field-label">Место</span><input type="text" name="place" maxlength="120" value="{{ fv('place') }}"></label>
+        <div class="field wide"><span class="field-label">Кто участвует</span>
+          <div class="checks-row">{% set ppl = (fv('people') or '').split(',') %}
+          {% for key, name, de in C.REFLECTION_PEOPLE %}<label class="check"><input type="checkbox" name="people_{{ key }}" value="1"{% if key in ppl or v.get('people_' ~ key) %} checked{% endif %}><span>{{ name }}<small class="muted"> {{ de }}</small></span></label>{% endfor %}
+          </div></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Чего достигли</h2><span class="muted small">с {{ start|d('dmy') }}, посчитано из CRM — можно поправить</span></div>
+      <input type="hidden" name="period_from" value="{{ start.isoformat() }}">
+      <div class="results-grid">
+        {% for key, name, de in C.REFLECTION_RESULTS %}
+        <label class="field"><span class="field-label">{{ name }}<small class="muted de-line">{{ de }}</small></span>
+          <input type="text" inputmode="decimal" name="res_{{ key }}" {% set rv = results.get(key, 0) or 0 %}value="{{ v.get('res_' ~ key) or (rv|int if rv == rv|int else rv) }}"></label>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Как прошёл период</h2></div>
+      <div class="field"><span class="field-label">Насколько вы довольны</span>
+        <div class="seg" role="radiogroup" aria-label="Насколько довольны">
+          {% set sat = (fv('satisfaction') or '')|string %}
+          {% for n, t in [(1, 'совсем нет'), (2, 'скорее нет'), (3, 'средне'), (4, 'доволен'), (5, 'очень')] %}
+          <label><input type="radio" name="satisfaction" value="{{ n }}"{% if sat == n|string %} checked{% endif %}><span>{{ t }}</span></label>
+          {% endfor %}
+        </div></div>
+      <label class="field" style="margin-top: 12px"><span class="field-label">Достигнуты ли цели прошлого разговора</span>
+        <textarea name="goals_reached" rows="3">{{ fv('goals_reached') }}</textarea>
+        {% if prev %}<span class="field-hint">Цели прошлого разговора ({{ prev['date']|d('dmy') }}): {{ [prev['goal1'], prev['goal2'], prev['goal3']]|select|join('; ') or 'не записаны' }}</span>{% endif %}</label>
+      <label class="field" style="margin-top: 12px"><span class="field-label">В чём хочется стать лучше</span>
+        <textarea name="improve" rows="2">{{ fv('improve') }}</textarea></label>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Контактный потенциал</h2><span class="muted small">Sicherheit aufbauen</span></div>
+      <div class="form-grid">
+        <label class="field"><span class="field-label">Для клиентов: сейчас</span><input type="number" min="0" name="cp_clients" value="{{ fv('cp_clients') }}"></label>
+        <label class="field"><span class="field-label">цель</span><input type="number" min="0" name="cp_clients_goal" value="{{ fv('cp_clients_goal') }}"></label>
+        <label class="field"><span class="field-label">Для партнёров: сейчас</span><input type="number" min="0" name="cp_partners" value="{{ fv('cp_partners') }}"></label>
+        <label class="field"><span class="field-label">цель</span><input type="number" min="0" name="cp_partners_goal" value="{{ fv('cp_partners_goal') }}"></label>
+      </div>
+      <p class="field-hint" style="margin-top: 8px">«Сейчас» подставлено из Marktpotenzial: все контакты и кандидаты в партнёры.</p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Три главные цели до следующего разговора</h2></div>
+      {% for i in [1, 2, 3] %}
+      <label class="field goal-line"><span class="field-label">{{ i }}.</span><input type="text" name="goal{{ i }}" maxlength="300" value="{{ fv('goal' ~ i) }}"></label>
+      {% endfor %}
+      <label class="field" style="margin-top: 12px"><span class="field-label">План работы для этих целей</span>
+        <textarea name="work_plan" rows="4">{{ fv('work_plan') }}</textarea></label>
+      <div class="field" style="margin-top: 12px"><span class="field-label">Куда человек хочет прийти</span>
+        <div class="seg" role="radiogroup">
+          {% for key, name, de in C.CAREER_INTENTS %}<label><input type="radio" name="intent" value="{{ key }}"{% if fv('intent') == key %} checked{% endif %}><span title="{{ de }}">{{ name }}</span></label>{% endfor %}
+        </div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Следующий разговор</h2></div>
+      <div class="form-grid">
+        <label class="field"><span class="field-label">Дата</span><input type="date" name="next_date" value="{{ fv('next_date') }}"></label>
+        <label class="field"><span class="field-label">Время</span><input type="time" name="next_time" value="{{ fv('next_time') }}"></label>
+      </div>
+      <p class="field-hint" style="margin-top: 8px">Встреча появится в вашем планере, три цели — в её заметке.</p>
+    </section>
+  </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn primary">Сохранить разговор</button>
+    <a class="btn ghost" href="{{ url_for('main.person', pid=p['id']) }}#reflections">Отмена</a>
+  </div>
+</form>
+{% endblock %}

@@ -80,6 +80,12 @@
     });
   });
 
+  // Самооценка: число рядом с ползунком
+  document.querySelectorAll("input[type=range][data-out]").forEach(function (r) {
+    var out = document.getElementById(r.getAttribute("data-out"));
+    r.addEventListener("input", function () { if (out) out.textContent = r.value; });
+  });
+
   // Годовой план: «На год» → делим на 12 месяцев
   document.querySelectorAll("[data-fill-year]").forEach(function (inp) {
     inp.addEventListener("input", function () {
