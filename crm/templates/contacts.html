@@ -11,7 +11,7 @@
   <div>
     <h1>Marktpotenzial</h1>
     <p class="sub">{{ totals['n'] }} {{ plural(totals['n'], 'человек', 'человека', 'человек') }}, из них {{ totals['clients'] or 0 }} {{ plural(totals['clients'] or 0, 'клиент', 'клиента', 'клиентов') }}.
-      {% if totals['n'] < C.MIN_MARKTPOTENZIAL %}Для старта по AK1 стоит выписать хотя бы {{ C.MIN_MARKTPOTENZIAL }}.{% endif %}</p>
+      {% if totals['n'] < C.MIN_MARKTPOTENZIAL %}Минимум — {{ C.MIN_MARKTPOTENZIAL }} человек.{% endif %}</p>
   </div>
   <div class="actions"><a class="btn primary" href="{{ url_for('main.contact_new', person=owner['id']) }}">{{ icon('plus') }}Контакт с деталями</a></div>
 </header>

@@ -184,6 +184,8 @@ class FlowTest(Base):
         page = c.get("/stats?scope=team").data.decode()
         self.assertIn("Слабые места", page)
         self.assertIn("Пустой план", page)   # у Павла и Олега нет встреч
+        self.assertIn("меньше минимума (20)", page)
+        self.assertIn("Виктор Берг ›", page)   # иерархия над именем в «Слабых местах»
 
 
 

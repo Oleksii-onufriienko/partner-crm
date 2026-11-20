@@ -5,7 +5,7 @@ import datetime as dt
 
 from . import constants as C
 from .db import query
-from .util import MONTHS_NOM, fmt_date, month_bounds, monday, parse_date, today
+from .util import MONTHS_NOM, fmt_date, month_bounds, monday, parse_date, plural, today
 
 PERIODS = [
     ("week", "Эта неделя"),
@@ -186,8 +186,10 @@ def signals(persons):
             lst.append(f"Нет проведённых встреч за {C.NO_ACTIVITY_DAYS} дней")
         if not planned_ahead.get(pid):
             lst.append(f"Пустой план на {C.EMPTY_PLAN_DAYS} дней вперёд")
-        if contacts_n.get(pid, 0) < C.MIN_MARKTPOTENZIAL:
-            lst.append(f"Marktpotenzial: {contacts_n.get(pid, 0)} из {C.MIN_MARKTPOTENZIAL} контактов")
+        n = contacts_n.get(pid, 0)
+        if n < C.MIN_MARKTPOTENZIAL:
+            lst.append(f"В Marktpotenzial {n} {plural(n, 'человек', 'человека', 'человек')} — "
+                       f"меньше минимума ({C.MIN_MARKTPOTENZIAL})")
         if overdue.get(pid):
             lst.append(f"Просрочено напоминаний: {overdue[pid]}")
         if stale_planned.get(pid):

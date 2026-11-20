@@ -20,13 +20,15 @@
   --warn: #8a5a10;
   --warn-soft: #f6ecd8;
   --focus: #2f6352;
-  /* Kontaktpyramide: шкала от синего (холодный) к красному (очень горячий), «тёплый» — нейтральная середина.
-     Каждая половина проверена на различимость и контраст (в т.ч. при нарушениях цветовосприятия). */
-  --t-cold: #1c5cab;
-  --t-lukewarm: #86b6ef;
-  --t-warm: #b5ab9d;
-  --t-hot: #ef8a7f;
-  --t-very_hot: #c4302b;
+  /* Kontaktpyramide как термометр: синий (холодный) → голубой → жёлтый (тёплый) → оранжевый → красный.
+     Соседние уровни проверены на различимость, в т.ч. при нарушениях цветовосприятия.
+     Светлые цвета дополнены обводкой и всегда подписаны текстом. */
+  --t-cold: #1d5bc2;
+  --t-lukewarm: #62a8ea;
+  --t-warm: #e9c01a;
+  --t-hot: #f27b22;
+  --t-very_hot: #d42020;
+  --t-ring: rgba(36, 33, 29, .22);
   /* Логотип: собственные цвета, не зависят от шкалы температуры */
   --brand-1: #7a3314; --brand-2: #a94a20; --brand-3: #d0612d; --brand-4: #e5824e;
   /* Серии графиков (проверенная категориальная палитра, фиксированный порядок) */
@@ -45,7 +47,7 @@
     --ink: #ede8e1; --ink-2: #c4bdb3; --muted: #948c81;
     --primary: #86c2aa; --primary-hover: #9fd3bd; --primary-ink: #11201a; --primary-soft: #23352e;
     --danger: #e58a76; --danger-soft: #3a2420; --warn: #e2b45f; --warn-soft: #3a2f1c; --focus: #86c2aa;
-    --t-cold: #4f8ff0; --t-lukewarm: #4a6c9c; --t-warm: #7a7166; --t-hot: #a9554d; --t-very_hot: #ef5b4f;
+    --t-cold: #3570e8; --t-lukewarm: #6fb2f2; --t-warm: #f2d24a; --t-hot: #ec8128; --t-very_hot: #d92a26; --t-ring: rgba(0, 0, 0, .35);
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c;
     --hatch: rgba(237, 232, 225, .06);
   }
@@ -56,7 +58,7 @@
   --ink: #ede8e1; --ink-2: #c4bdb3; --muted: #948c81;
   --primary: #86c2aa; --primary-hover: #9fd3bd; --primary-ink: #11201a; --primary-soft: #23352e;
   --danger: #e58a76; --danger-soft: #3a2420; --warn: #e2b45f; --warn-soft: #3a2f1c; --focus: #86c2aa;
-  --t-cold: #4f8ff0; --t-lukewarm: #4a6c9c; --t-warm: #7a7166; --t-hot: #a9554d; --t-very_hot: #ef5b4f;
+  --t-cold: #3570e8; --t-lukewarm: #6fb2f2; --t-warm: #f2d24a; --t-hot: #ec8128; --t-very_hot: #d92a26; --t-ring: rgba(0, 0, 0, .35);
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c;
   --hatch: rgba(237, 232, 225, .06);
 }
@@ -273,7 +275,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .chip svg.i { width: 14px; height: 14px; }
 
 .temp { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.temp i { width: 10px; height: 10px; border-radius: 50%; background: var(--t); flex: none; }
+.temp i { width: 10px; height: 10px; border-radius: 50%; background: var(--t); flex: none; box-shadow: inset 0 0 0 1px var(--t-ring); }
 .t-very_hot { --t: var(--t-very_hot); } .t-hot { --t: var(--t-hot); } .t-warm { --t: var(--t-warm); }
 .t-lukewarm { --t: var(--t-lukewarm); } .t-cold { --t: var(--t-cold); }
 
@@ -282,6 +284,10 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .signals li::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn);
                       flex: none; transform: translateY(-1px); }
 .signals.none li::before { background: var(--primary); }
+.weak-row { align-items: flex-start !important; }
+.weak-who { display: grid; gap: 1px; min-width: 240px; max-width: 320px; }
+.crumb-path { font-size: 12px; color: var(--muted); line-height: 1.35; }
+@media (max-width: 860px) { .weak-row { flex-direction: column; gap: 6px !important; } .weak-who { min-width: 0; } }
 
 /* ------------------------------------------------------------ Kontaktpyramide */
 .pyramid { display: grid; gap: 6px; }
@@ -289,7 +295,7 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .pyr-row .lbl { color: var(--ink-2); }
 .pyr-row .n { text-align: right; font-weight: 600; color: var(--ink); }
 .pyr-track { height: 22px; display: flex; justify-content: center; }
-.pyr-bar { width: max(var(--w), 3px); height: 100%; border-radius: 4px; background: var(--t); }
+.pyr-bar { width: max(var(--w), 3px); height: 100%; border-radius: 4px; background: var(--t); box-shadow: inset 0 0 0 1px var(--t-ring); }
 .pyr-bar.zero { width: 3px; background: var(--line-strong); }
 .pyr-foot { margin-top: 12px; font-size: 13px; color: var(--muted); }
 
@@ -528,6 +534,5 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .table th:first-child, .table td:first-child { padding-left: 14px; }
   .table th:last-child, .table td:last-child { padding-right: 14px; }
   .hide-m { display: none; }
-  .table .temp .tl { display: none; }
   .toolbar input[type=search], .toolbar select { max-width: none; flex: 1 1 140px; }
 }

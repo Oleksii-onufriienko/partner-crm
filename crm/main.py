@@ -764,7 +764,18 @@ def stats():
     partners.sort(key=lambda x: (-x["m"]["deal_ke"], -x["m"]["done"]))
 
     sig = S.signals([vp[i] for i in b])
-    weak = [(vp[i], sig[i]) for i in b if sig.get(i) and vp[i]["active"]]
+
+    def chain(person_id):
+        """Цепочка бетроеров от просматриваемого человека до наставника этого партнёра."""
+        out, cur = [], vp[person_id]["parent_id"]
+        while cur is not None and cur in vp:
+            out.append(vp[cur])
+            if cur == pid:
+                break
+            cur = vp[cur]["parent_id"]
+        return list(reversed(out))
+
+    weak = [(vp[i], sig[i], chain(i) if i != pid else []) for i in b if sig.get(i) and vp[i]["active"]]
 
     chart = S.activity_series(b if scope == "team" else [pid], start, end)
 
