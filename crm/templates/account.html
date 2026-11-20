@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block title %}Мой профиль{% endblock %}
+{% block content %}
+{% set u = g.user %}
+<header class="page-head">
+  <div><h1>Мой профиль</h1>
+  <p class="sub">{{ u['stufe']|label(C.STUFEN) }}{% if u['coef'] is not none %}, {{ u['coef']|num(2) }} € за 1 KE{% endif %}. Ступень и коэффициент меняет наставник.</p></div>
+  <div class="actions"><a class="btn" href="{{ url_for('main.person', pid=u['id']) }}">Моя карточка</a></div>
+</header>
+<div class="grid-2">
+  <form method="post" class="panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="profile">
+    <div class="panel-head"><h2>Контактные данные</h2></div>
+    <div class="form-grid">
+      <label class="field wide"><span class="field-label">E-mail для входа</span><input type="email" name="email" required value="{{ form.get('email', u['email'] or '') }}"></label>
+      <label class="field"><span class="field-label">Телефон</span><input type="tel" name="phone" value="{{ form.get('phone', u['phone'] or '') }}"></label>
+      <label class="field"><span class="field-label">Дата рождения</span><input type="date" name="birth_date" value="{{ form.get('birth_date', u['birth_date'] or '') }}"></label>
+    </div>
+    <div class="form-actions"><button class="btn primary">Сохранить</button></div>
+  </form>
+  <form method="post" class="panel">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="password">
+    <div class="panel-head"><h2>Пароль</h2></div>
+    <div class="form-grid">
+      <label class="field wide"><span class="field-label">Текущий пароль</span><input type="password" name="current" required autocomplete="current-password"></label>
+      <label class="field"><span class="field-label">Новый пароль</span><input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+      <label class="field"><span class="field-label">Ещё раз</span><input type="password" name="password2" required minlength="8" autocomplete="new-password"></label>
+    </div>
+    <div class="form-actions"><button class="btn">Сменить пароль</button></div>
+  </form>
+</div>
+{% endblock %}

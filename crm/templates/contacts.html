@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, temp, status_chip, person_select, options as opts with context %}
+{% block title %}Marktpotenzial{% endblock %}
+{% block content %}
+{% set a = request.args %}
+{% set is_me = owner['id'] == g.user['id'] %}
+<header class="page-head">
+  <div>
+    <h1>Marktpotenzial{% if not is_me %}: {{ owner|fullname }}{% endif %}</h1>
+    <p class="sub">{{ totals['n'] }} {{ plural(totals['n'], 'человек', 'человека', 'человек') }}, из них {{ totals['clients'] or 0 }} {{ plural(totals['clients'] or 0, 'клиент', 'клиента', 'клиентов') }}.
+      {% if totals['n'] < C.MIN_MARKTPOTENZIAL %}Для старта по AK1 стоит выписать хотя бы {{ C.MIN_MARKTPOTENZIAL }}.{% endif %}</p>
+  </div>
+  <div class="actions"><a class="btn primary" href="{{ url_for('main.contact_new', person=owner['id']) }}">{{ icon('plus') }}Контакт с деталями</a></div>
+</header>
+
+<form class="toolbar" method="get" role="search">
+  {% if options|length > 1 %}{{ person_select('person', options, owner['id'], attrs='data-autosubmit aria-label="Чей Marktpotenzial"') }}{% endif %}
+  <input type="search" name="q" value="{{ a.get('q', '') }}" placeholder="Имя, телефон, профессия" aria-label="Поиск">
+  <select name="temperature" data-autosubmit aria-label="Температура"><option value="">Любая температура</option>{{ opts(C.TEMPERATURES, a.get('temperature', '')) }}</select>
+  <select name="status" data-autosubmit aria-label="Статус"><option value="">Любой статус</option>{{ opts(C.CONTACT_STATUSES, a.get('status', '')) }}</select>
+  <select name="kind" data-autosubmit aria-label="Тип"><option value="">Все типы</option>{{ opts(C.KINDS, a.get('kind', '')) }}</select>
+  <label class="check small"><input type="checkbox" name="partner" value="1" data-autosubmit{% if a.get('partner') %} checked{% endif %}><span>Интерес к партнёрству</span></label>
+  <span class="grow"></span>
+  <select name="sort" data-autosubmit aria-label="Сортировка">
+    {{ opts([('name', 'По фамилии'), ('temp', 'По температуре'), ('next', 'По напоминанию'), ('potential', 'По потенциалу'), ('new', 'Сначала новые')], sort) }}
+  </select>
+  <noscript><button class="btn">Показать</button></noscript>
+  {% if filtered %}<a class="btn ghost" href="{{ url_for('main.contacts', person=owner['id']) }}">Сбросить</a>{% endif %}
+</form>
+
+<section class="panel flush">
+  <form method="post" class="quick-add" aria-label="Быстро добавить контакт">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="person" value="{{ owner['id'] }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <label class="field"><span class="field-label">Имя</span><input type="text" name="first_name" required></label>
+    <label class="field"><span class="field-label">Фамилия</span><input type="text" name="last_name"></label>
+    <label class="field"><span class="field-label">Телефон</span><input type="tel" name="phone"></label>
+    <label class="field"><span class="field-label">Kontaktpyramide</span>
+      <select name="temperature">{{ opts(C.TEMPERATURES, 'warm') }}</select></label>
+    <button class="btn">{{ icon('plus') }}Добавить</button>
+  </form>
+  {% if rows %}
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Имя</th><th>Телефон</th><th>Температура</th><th class="hide-m">Канал</th><th>Статус</th>
+      <th class="num">Потенциал</th><th class="num hide-m">Оформлено</th><th class="hide-m">Напомнить</th></tr></thead>
+    <tbody>
+    {% for c in rows %}
+      <tr>
+        <td><a class="row-link" href="{{ url_for('main.contact', cid=c['id']) }}">{{ c['first_name'] }} {{ c['last_name'] or '' }}</a>
+          {% set bits = [] %}{% if c['kind'] == 'client' %}{% set _ = bits.append('Клиент') %}{% endif %}{% if c['profession'] %}{% set _ = bits.append(c['profession']) %}{% endif %}{% if c['age'] %}{% set _ = bits.append(c['age'] ~ ' ' ~ plural(c['age'], 'год', 'года', 'лет')) %}{% endif %}{% if c['partner_interest'] %}{% set _ = bits.append('интерес к партнёрству') %}{% endif %}
+          {% if bits %}<span class="sub">{{ bits|join(', ') }}</span>{% endif %}</td>
+        <td class="nowrap">{% if c['phone'] %}<a href="tel:{{ c['phone'] }}">{{ c['phone'] }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td>{{ temp(c['temperature']) }}</td>
+        <td class="hide-m">{{ c['channel']|label(C.CHANNELS) }}</td>
+        <td>{{ status_chip(c['status']) }}</td>
+        <td class="num">{{ c['potential_ke']|num(1) if c['potential_ke'] else '—' }}</td>
+        <td class="num hide-m">{{ c['deal_ke']|num(1) if c['deal_ke'] else '—' }}</td>
+        <td class="hide-m nowrap">{% if c['next_action_date'] %}<span class="{{ 'chip danger' if c['next_action_date'] < today().isoformat() and c['status'] != 'no_chance' else '' }}">{{ c['next_action_date']|d }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="empty" style="padding: 18px 22px">{% if filtered %}Под фильтр никто не подходит.{% else %}Запишите всех, кого знаете: семья, друзья, коллеги, соседи, бывшие одноклассники. Каждого — одной строкой выше, детали можно добавить потом.{% endif %}</p>
+  {% endif %}
+</section>
+<p class="foot-note">Потенциал и «оформлено» — в KE. Дата напоминания подсвечена, если срок прошёл.</p>
+{% endblock %}

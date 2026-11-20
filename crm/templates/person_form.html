@@ -1,0 +1,57 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import person_select with context %}
+{% block title %}{{ 'Редактирование' if person else 'Новый партнёр' }}{% endblock %}
+{% macro v(key, default='') -%}
+{%- if key in form -%}{{ form[key] }}{%- elif person and person[key] is not none -%}{{ person[key] }}{%- else -%}{{ default }}{%- endif -%}
+{%- endmacro %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.team') }}">Команда</a>{% if person %} / <a href="{{ url_for('main.person', pid=person['id']) }}">{{ person|fullname }}</a>{% endif %}</p>
+    <h1>{{ 'Данные партнёра' if person else 'Новый партнёр в структуре' }}</h1>
+    {% if not person %}<p class="sub">Сначала заводим человека. Кабинет можно открыть сразу или позже — ссылкой-приглашением.</p>{% endif %}
+  </div>
+</header>
+<form method="post" class="panel" style="max-width: 860px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Имя</span><input type="text" name="first_name" required value="{{ v('first_name') }}" autofocus></label>
+    <label class="field"><span class="field-label">Фамилия</span><input type="text" name="last_name" required value="{{ v('last_name') }}"></label>
+
+    <label class="field wide"><span class="field-label">Наставник (кто выше в структуре)</span>
+      {{ person_select('parent_id', options, form.get('parent_id', parent_id), empty='— верхний уровень (главный бетроер) —' if g.user['is_admin'] else none) }}</label>
+
+    <div class="form-section"><h3>Ступень и доход</h3></div>
+    <label class="field"><span class="field-label">Ступень (Stufe)</span>
+      <select name="stufe" data-coefs='{{ C.STUFE_DEFAULT_COEF|tojson }}'>
+        {% set cur = v('stufe', 'VM') %}
+        {% for code, name, coef in C.STUFEN %}<option value="{{ code }}"{% if cur == code %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select></label>
+    <label class="field"><span class="field-label">€ за 1 KE</span>
+      <input type="text" inputmode="decimal" name="coef" value="{{ v('coef', '' if person else '1') }}">
+      <span class="field-hint">По AK1: VM 1–3 €, VBA 6 €, AL 9 €, RGS 10 €</span></label>
+    <label class="field"><span class="field-label">Цель KE в месяц</span><input type="text" inputmode="decimal" name="goal_ke_month" value="{{ v('goal_ke_month') }}"></label>
+    <label class="field"><span class="field-label">Дата входа в бизнес</span><input type="date" name="start_date" value="{{ v('start_date') }}"></label>
+
+    <div class="form-section"><h3>Контакты</h3></div>
+    <label class="field"><span class="field-label">Телефон</span><input type="tel" name="phone" value="{{ v('phone') }}"></label>
+    <label class="field"><span class="field-label">Дата рождения</span><input type="date" name="birth_date" value="{{ v('birth_date') }}"></label>
+    <label class="field wide"><span class="field-label">E-mail</span><input type="email" name="email" value="{{ v('email') }}">
+      <span class="field-hint">Станет логином. Можно оставить пустым — человек укажет его сам по приглашению.</span></label>
+    <label class="field wide"><span class="field-label">Заметка</span><textarea name="note" rows="3">{{ v('note') }}</textarea></label>
+
+    {% if g.user['is_admin'] and (not person or person['id'] != g.user['id']) %}
+    <label class="check wide"><input type="checkbox" name="is_admin" value="1"{% if (form.get('is_admin') if form else (person and person['is_admin'])) %} checked{% endif %}>
+      <span>Администратор системы<span class="field-hint" style="display:block">Видит всех и может заводить главных бетроеров.</span></span></label>
+    {% endif %}
+    {% if not person %}
+    <label class="check wide"><input type="checkbox" name="invite" value="1"{% if form.get('invite', '1') %} checked{% endif %}>
+      <span>Сразу создать ссылку для входа в кабинет</span></label>
+    {% endif %}
+  </div>
+  <div class="form-actions">
+    <button class="btn primary">{{ 'Сохранить' if person else 'Добавить в структуру' }}</button>
+    <a class="btn ghost" href="{{ url_for('main.person', pid=person['id']) if person else url_for('main.team') }}">Отмена</a>
+  </div>
+</form>
+{% endblock %}

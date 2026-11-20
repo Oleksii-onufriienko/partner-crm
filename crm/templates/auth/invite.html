@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}Создание кабинета{% endblock %}
+{% block bare %}
+<form method="post" class="auth-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>{{ person['first_name'] }}, добро пожаловать</h1>
+  <p class="sub">{% if person['password_hash'] %}Задайте новый пароль для своего кабинета.{% else %}Придумайте пароль — и кабинет готов. В нём вы ведёте свой Marktpotenzial, встречи и команду.{% endif %}</p>
+  <label class="field"><span class="field-label">E-mail для входа</span>
+    <input type="email" name="email" required autocomplete="username" value="{{ form.get('email', person['email'] or '') }}"></label>
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Пароль</span><input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <label class="field"><span class="field-label">Пароль ещё раз</span><input type="password" name="password2" required minlength="8" autocomplete="new-password"></label>
+  </div>
+  {% if not person['password_hash'] %}
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Телефон</span><input type="tel" name="phone" value="{{ form.get('phone', person['phone'] or '') }}"></label>
+    <label class="field"><span class="field-label">Дата рождения</span><input type="date" name="birth_date" value="{{ form.get('birth_date', person['birth_date'] or '') }}"></label>
+  </div>
+  {% endif %}
+  <div class="form-actions"><button class="btn primary block">{{ 'Сохранить пароль' if person['password_hash'] else 'Создать кабинет' }}</button></div>
+</form>
+{% endblock %}

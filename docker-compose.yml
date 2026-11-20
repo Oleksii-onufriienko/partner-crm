@@ -1,0 +1,23 @@
+# Облачный запуск: CRM + Caddy (автоматический HTTPS-сертификат).
+# 1) Направьте домен (например crm.ваш-домен.de) на IP сервера.
+# 2) Впишите домен в Caddyfile.
+# 3) docker compose up -d
+services:
+  crm:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - ./data:/data          # база и секретный ключ — бэкапить эту папку
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    depends_on:
+      - crm
+volumes:
+  caddy_data:

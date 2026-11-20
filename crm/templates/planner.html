@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, person_select with context %}
+{% block title %}Планер{% endblock %}
+{% block content %}
+{% set is_me = p['id'] == g.user['id'] %}
+<header class="page-head">
+  <div>
+    <h1>Планер на 6 недель{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <p class="sub">{{ start|d('long') }} – {{ end|d('long') }}. Нажмите на день, чтобы запланировать встречу.</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('main.planner', person=p['id'], start=prev.isoformat()) }}" aria-label="Предыдущие 6 недель">{{ icon('chev-l') }}</a>
+    <a class="btn" href="{{ url_for('main.planner', person=p['id']) }}">Сегодня</a>
+    <a class="btn ghost" href="{{ url_for('main.planner', person=p['id'], start=next.isoformat()) }}" aria-label="Следующие 6 недель">{{ icon('chev-r') }}</a>
+    <a class="btn primary" href="{{ url_for('main.meeting_new', person=p['id'], next=request.full_path) }}">{{ icon('plus') }}Встреча</a>
+  </div>
+</header>
+
+{% if options|length > 1 %}
+<form class="toolbar" method="get">
+  <label class="field-label" for="pl-person">Чей план</label>
+  {{ person_select('person', options, p['id'], attrs='id="pl-person" data-autosubmit') }}
+  <input type="hidden" name="start" value="{{ start.isoformat() }}">
+  <noscript><button class="btn">Показать</button></noscript>
+</form>
+{% endif %}
+
+<div class="planner">
+  <div class="pl-row pl-head" aria-hidden="true">{% for wd in WEEKDAYS %}<div>{{ wd }}</div>{% endfor %}<div>Неделя</div></div>
+  {% for w in weeks %}
+  <div class="pl-row pl-week">
+    {% for d in w.days %}
+    {% set iso = d.isoformat() %}
+    <div class="pl-day{{ ' weekend' if d.weekday() >= 5 }}{{ ' today' if d == today }}{{ ' past' if d < today }}">
+      <div class="pl-date" data-wd="{{ WEEKDAYS[d.weekday()] }}"><b>{{ d.day }}</b>{% if d.day == 1 or (loop.first and loop.index0 == 0 and w == weeks[0]) %}<span class="m">{{ d|d('short') | replace(d.day ~ ' ', '') }}</span>{% endif %}
+        <a class="pl-add" href="{{ url_for('main.meeting_new', person=p['id'], date=iso, next=request.full_path) }}" aria-label="Встреча на {{ d|d('long') }}">+</a></div>
+      {% for m in by_day.get(iso, []) %}
+        {% set who = ((m['cf'] ~ ' ' ~ (m['cl'] or '')) if m['cf'] else (m['title'] or '')).strip() %}
+        <a class="mt st-{{ m['status'] }} fmt-{{ m['format'] }}" href="{{ url_for('main.meeting_edit', mid=m['id'], next=request.full_path) }}"
+           title="{{ m['stage']|label(C.STAGES) }}, {{ m['format']|label(C.FORMATS)|lower }}{% if who %}: {{ who }}{% endif %}">
+          {% if m['time'] %}<b>{{ m['time'] }}</b>{% endif %}
+          {% if m['format'] == 'private' %}<span class="stage">{{ m['title'] or 'Личное время' }}</span>
+          {% else %}<span class="stage">{{ m['stage']|stage_short }}</span>{% if m['format'] in ('call', 'online') %} <span class="fmt">{{ m['format']|label(C.FORMATS)|lower }}</span>{% endif %}
+          {% if who %}<span class="who">{{ who }}</span>{% endif %}{% endif %}
+        </a>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    <div class="pl-sum">
+      <span><b>{{ w.planned }}</b> {{ plural(w.planned, 'встреча', 'встречи', 'встреч') }}</span>
+      <span>{{ w.done }} {{ plural(w.done, 'проведена', 'проведены', 'проведено') }}</span>
+      {% if w.ke %}<span>{{ w.ke|num(1) }} KE ожидается</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+<div class="pl-legend">
+  <span><span class="mt">Запланирована</span></span>
+  <span><span class="mt st-done"><span class="stage">Проведена</span></span></span>
+  <span><span class="mt st-cancelled"><span class="stage">Отменена</span></span></span>
+  <span><span class="mt fmt-private">Личное время</span></span>
+</div>
+{% endblock %}

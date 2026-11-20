@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon with context %}
+{% block title %}Команда{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div><h1>Команда</h1>
+  <p class="sub">{{ rows|length }} {{ plural(rows|length, 'человек', 'человека', 'человек') }} в структуре. Цифры за текущий месяц, лично по каждому.</p></div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('main.team', all='0' if show_inactive else '1') }}">{{ 'Скрыть неактивных' if show_inactive else 'Показать неактивных' }}</a>
+    <a class="btn primary" href="{{ url_for('main.person_new') }}">{{ icon('plus') }}Добавить партнёра</a>
+  </div>
+</header>
+
+<section class="panel flush">
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr>
+      <th>Имя</th><th>Ступень</th><th class="hide-m">Кабинет</th>
+      <th class="num">Контакты</th><th class="num">Встречи</th><th class="num">Оформлено</th><th class="num hide-m">Сигналы</th>
+    </tr></thead>
+    <tbody>
+    {% for p, depth in rows %}
+      {% set m = per[p['id']] %}
+      <tr class="{{ '' if p['active'] else 'inactive' }}">
+        <td><span class="tree-name" style="--depth: {{ depth }}">
+          {% if depth %}<span class="branch" aria-hidden="true"></span>{% endif %}
+          <span><a class="row-link" href="{{ url_for('main.person', pid=p['id']) }}">{{ p|fullname }}</a>{% if p['id'] == g.user['id'] %} <span class="muted">(я)</span>{% endif %}
+          {% if cmap.get(p['id']) %}<span class="sub">{{ cmap[p['id']]|length }} {{ plural(cmap[p['id']]|length, 'прямой партнёр', 'прямых партнёра', 'прямых партнёров') }}</span>{% endif %}</span>
+        </span></td>
+        <td>{{ p['stufe'] }}</td>
+        <td class="hide-m">{% if not p['active'] %}<span class="chip">Неактивен</span>
+          {% elif p['password_hash'] %}<span class="chip ok">Есть</span>
+          {% elif p['invite_hash'] %}<span class="chip warn">Приглашён</span>
+          {% else %}<span class="chip outline">Нет</span>{% endif %}</td>
+        <td class="num">{{ m.contacts }}</td>
+        <td class="num">{{ m.done }} / {{ m.planned }}</td>
+        <td class="num">{{ m.deal_ke|num(1) }} KE</td>
+        <td class="num hide-m">{% set s = sig.get(p['id'], []) %}{% if s %}<span class="chip warn" title="{{ s|join('; ') }}">{{ s|length }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+<p class="foot-note">Встречи: проведено / запланировано в этом месяце. Сигналы — слабые места: наведите на число, чтобы увидеть, или откройте карточку.</p>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}Ссылка недействительна{% endblock %}
+{% block bare %}
+<div class="auth-card">
+  <h1>Ссылка не работает</h1>
+  <p class="sub">Она устарела или уже была использована. Попросите наставника создать новую ссылку в карточке партнёра.</p>
+  <a class="btn block" href="{{ url_for('auth.login') }}">Перейти ко входу</a>
+</div>
+{% endblock %}

@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, temp, seg, person_select, options as opts with context %}
+{% block title %}{{ (c['first_name'] ~ ' ' ~ (c['last_name'] or '')) if c else 'Новый контакт' }}{% endblock %}
+{% macro v(key, default='') -%}
+{%- if key in form -%}{{ form[key] }}{%- elif c and c[key] is not none -%}{{ c[key] }}{%- else -%}{{ default }}{%- endif -%}
+{%- endmacro %}
+{% block content %}
+<datalist id="products">{% for pr in C.PRODUCTS %}<option value="{{ pr }}">{% endfor %}</datalist>
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.contacts', person=owner_id) }}">Marktpotenzial</a>{% if c and owner and owner['id'] != g.user['id'] %} / {{ owner|fullname }}{% endif %}</p>
+    <h1>{{ (c['first_name'] ~ ' ' ~ (c['last_name'] or '')) if c else 'Новый контакт' }}</h1>
+    {% if c %}<p class="sub">{{ temp(c['temperature']) }}&ensp;{{ c['kind']|label(C.KINDS) }}, {{ c['status']|label(C.CONTACT_STATUSES)|lower }}{% if c['phone'] %}, <a href="tel:{{ c['phone'] }}">{{ c['phone'] }}</a>{% endif %}</p>{% endif %}
+  </div>
+  {% if c %}<div class="actions"><a class="btn primary" href="{{ url_for('main.meeting_new', person=c['owner_id'], contact_id=c['id']) }}">{{ icon('plus') }}Назначить встречу</a></div>{% endif %}
+</header>
+
+<div class="grid-2">
+  <div>
+    <form method="post" class="panel">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-grid">
+        {% if options|length > 1 %}
+        <label class="field wide"><span class="field-label">Чей контакт</span>{{ person_select('owner_id', options, v('owner_id', owner_id)) }}</label>
+        {% else %}<input type="hidden" name="owner_id" value="{{ owner_id }}">{% endif %}
+        <label class="field"><span class="field-label">Имя</span><input type="text" name="first_name" required value="{{ v('first_name') }}"{% if not c %} autofocus{% endif %}></label>
+        <label class="field"><span class="field-label">Фамилия</span><input type="text" name="last_name" value="{{ v('last_name') }}"></label>
+        <label class="field"><span class="field-label">Телефон</span><input type="tel" name="phone" value="{{ v('phone') }}"></label>
+        <label class="field"><span class="field-label">E-mail</span><input type="email" name="email" value="{{ v('email') }}"></label>
+        <label class="field"><span class="field-label">Возраст</span><input type="number" name="age" min="1" max="119" value="{{ v('age') }}"></label>
+        <label class="field"><span class="field-label">Профессия</span><input type="text" name="profession" value="{{ v('profession') }}"></label>
+
+        <div class="form-section"><h3>Откуда контакт</h3></div>
+        <div class="field wide"><span class="field-label">Kontaktpyramide</span>{{ seg('temperature', C.TEMPERATURES, v('temperature', 'warm'), show_temp=true) }}
+          <span class="field-hint">{% for key, name, de, hint in C.TEMPERATURES %}{{ name }} — {{ hint }}{{ '; ' if not loop.last else '.' }}{% endfor %}</span></div>
+        <div class="field wide"><span class="field-label">Канал привлечения</span>{{ seg('channel', C.CHANNELS, v('channel', 'warm')) }}</div>
+        <label class="field wide"><span class="field-label">По рекомендации от</span><input type="text" name="recommended_by" value="{{ v('recommended_by') }}" placeholder="Кто порекомендовал"></label>
+
+        <div class="form-section"><h3>Работа с контактом</h3></div>
+        <div class="field wide"><span class="field-label">Тип контакта</span>{{ seg('kind', C.KINDS, v('kind', 'prospect')) }}</div>
+        <label class="field"><span class="field-label">Статус</span><select name="status">{{ opts(C.CONTACT_STATUSES, v('status', 'new')) }}</select></label>
+        <label class="check" style="align-self: end; padding-bottom: 9px"><input type="checkbox" name="partner_interest" value="1"{% if (form.get('partner_interest') if form else (c and c['partner_interest'])) %} checked{% endif %}><span>Интерес к сотрудничеству (потенциальный партнёр)</span></label>
+        <label class="field"><span class="field-label">Следующий шаг</span><input type="text" name="next_action" value="{{ v('next_action') }}" placeholder="Например: перезвонить после отпуска"></label>
+        <label class="field"><span class="field-label">Когда напомнить</span><input type="date" name="next_action_date" value="{{ v('next_action_date') }}"></label>
+        <label class="field wide"><span class="field-label">Комментарий</span><textarea name="comment" rows="4" placeholder="Цели и желания, семья, что важно человеку">{{ v('comment') }}</textarea></label>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary">{{ 'Сохранить' if c else 'Сохранить контакт' }}</button>
+        <a class="btn ghost" href="{{ url_for('main.contacts', person=owner_id) }}">{{ 'К списку' if c else 'Отмена' }}</a>
+      </div>
+    </form>
+    {% if c %}
+    <form method="post" action="{{ url_for('main.contact_delete', cid=c['id']) }}" data-confirm="Удалить контакт вместе с его сделками?" style="margin-top: 12px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="btn danger small">Удалить контакт</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div>
+  {% if c %}
+    {% set pot_total = potentials|sum(attribute='ke') %}
+    <section class="panel" id="potentials">
+      <div class="panel-head"><h2>Потенциальные сделки</h2>{% if pot_total %}<span class="ink-2">{{ pot_total|num(1) }} KE{% if owner['coef'] %}, {{ (pot_total * owner['coef'])|eur }}{% endif %}</span>{% endif %}</div>
+      {% if potentials %}
+      <ul class="item-list">{% for it in potentials %}
+        <li><span class="grow">{{ it['product'] }}</span><span class="sum">{{ it['ke']|num(1) }} KE</span>
+          <button class="btn small" type="button" data-to-deal="{{ it['id'] }}" data-product="{{ it['product'] }}" data-ke="{{ it['ke']|num(1) }}">Оформить</button>
+          <form method="post" action="{{ url_for('main.potential_delete', item_id=it['id']) }}" class="inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn ghost small" aria-label="Убрать {{ it['product'] }}">Убрать</button></form></li>
+      {% endfor %}</ul>
+      {% else %}<p class="empty">Что может быть интересно человеку? Добавьте продукты и оценку в KE.</p>{% endif %}
+      <form method="post" action="{{ url_for('main.potential_add', cid=c['id']) }}" class="add-row">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="product" list="products" placeholder="Продукт" required aria-label="Продукт">
+        <input type="text" name="ke" inputmode="decimal" placeholder="KE" aria-label="KE">
+        <button class="btn">Добавить</button>
+      </form>
+    </section>
+
+    {% set deal_total = deals|sum(attribute='ke') %}
+    <section class="panel" id="deals">
+      <div class="panel-head"><h2>Оформленные сделки</h2>{% if deal_total %}<span class="ink-2">{{ deal_total|num(1) }} KE{% if owner['coef'] %}, {{ (deal_total * owner['coef'])|eur }}{% endif %}</span>{% endif %}</div>
+      {% if deals %}
+      <ul class="item-list">{% for it in deals %}
+        <li><span class="muted nowrap">{{ it['date']|d('dmy') }}</span><span class="grow">{{ it['product'] }}{% if it['note'] %} <span class="muted small">{{ it['note'] }}</span>{% endif %}</span>
+          <span class="sum">{{ it['ke']|num(1) }} KE</span>
+          <form method="post" action="{{ url_for('main.deal_delete', item_id=it['id']) }}" class="inline" data-confirm="Удалить сделку?">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn ghost small" aria-label="Удалить сделку">Удалить</button></form></li>
+      {% endfor %}</ul>
+      {% else %}<p class="empty">Сделок пока нет. Первая сделка автоматически сделает человека клиентом.</p>{% endif %}
+      <form method="post" action="{{ url_for('main.deal_add', cid=c['id']) }}" class="add-row deal" id="deal-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="from_potential" value="">
+        <input type="text" name="product" list="products" placeholder="Продукт" required aria-label="Продукт" class="full">
+        <input type="date" name="date" value="{{ today.isoformat() }}" required aria-label="Дата заключения">
+        <input type="text" name="ke" inputmode="decimal" placeholder="KE" required aria-label="KE">
+        <button class="btn">Добавить</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Встречи</h2><a href="{{ url_for('main.meeting_new', person=c['owner_id'], contact_id=c['id']) }}">Назначить</a></div>
+      {% if meetings %}
+      <ul class="item-list">{% for mt in meetings %}
+        <li><span class="muted nowrap">{{ mt['date']|d('dmy') }}</span>
+          <span class="grow"><a class="row-link" href="{{ url_for('main.meeting_edit', mid=mt['id'], next=request.path) }}">{{ mt['stage']|label(C.STAGES) }}</a>
+            <span class="muted small">{{ mt['format']|label(C.FORMATS)|lower }}</span></span>
+          <span class="chip {{ 'ok' if mt['status'] == 'done' else ('outline' if mt['status'] == 'planned' else '') }}">{{ mt['status']|label(C.MEETING_STATUSES) }}</span></li>
+      {% endfor %}</ul>
+      {% else %}<p class="empty">Встреч с этим человеком ещё не было.</p>{% endif %}
+    </section>
+  {% else %}
+    <section class="panel">
+      <h2>Что дальше</h2>
+      <p class="ink-2" style="margin-top:8px">После сохранения здесь появятся потенциальные и оформленные сделки, а также встречи с этим человеком.</p>
+    </section>
+  {% endif %}
+  </div>
+</div>
+{% endblock %}

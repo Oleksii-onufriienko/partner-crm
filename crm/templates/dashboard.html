@@ -1,0 +1,125 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, meeting_line, pyramid, temp, status_chip with context %}
+{% block title %}Сегодня{% endblock %}
+{% block content %}
+{% set u = g.user %}
+<header class="page-head">
+  <div>
+    <h1>{{ today()|d('weekday')|capitalize }}</h1>
+    <p class="sub">{{ u['first_name'] }}, вот что у вас сегодня и как идёт {{ month_label|lower }}.</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('main.contact_new') }}">{{ icon('plus') }}Контакт</a>
+    <a class="btn primary" href="{{ url_for('main.meeting_new', date=today().isoformat()) }}">{{ icon('plus') }}Встреча</a>
+  </div>
+</header>
+
+<dl class="kpis" aria-label="Показатели за месяц">
+  <div><dt>Встречи проведены</dt><dd>{{ m.done }} <small>из {{ m.planned }}</small></dd>
+    <span class="sub">{% if m.planned %}{{ (100 * m.done / m.planned)|round|int }}% плана месяца{% else %}план пока пуст{% endif %}</span></div>
+  <div><dt>Оформлено</dt><dd>{{ m.deal_ke|num(1) }} <small>KE</small></dd>
+    <span class="sub">{{ m.eur_deals|eur }}{% if u['goal_ke_month'] %}, цель {{ u['goal_ke_month']|num }} KE{% endif %}</span></div>
+  <div><dt>Ожидается по встречам</dt><dd>{{ m.expected_ke|num(1) }} <small>KE</small></dd>
+    <span class="sub">{{ m.eur_expected|eur }}</span></div>
+  <div><dt>Клиентский потенциал</dt><dd>{{ m.potential_ke|num(1) }} <small>KE</small></dd>
+    <span class="sub">{{ m.eur_potential|eur }}</span></div>
+  <div><dt>Marktpotenzial</dt><dd>{{ m.contacts }} <small>{{ plural(m.contacts, 'контакт', 'контакта', 'контактов') }}</small></dd>
+    <span class="sub">{{ m.clients }} {{ plural(m.clients, 'клиент', 'клиента', 'клиентов') }}, +{{ m.new_contacts }} за месяц</span></div>
+</dl>
+
+<div class="grid-2">
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Встречи сегодня</h2><a href="{{ url_for('main.planner') }}">Открыть планер</a></div>
+      {% if today_meetings %}
+      <ul class="agenda">{% for mt in today_meetings %}{{ meeting_line(mt) }}{% endfor %}</ul>
+      {% else %}
+      <p class="empty">На сегодня встреч нет. <a href="{{ url_for('main.meeting_new', date=today().isoformat()) }}">Запланировать встречу</a></p>
+      {% endif %}
+    </section>
+
+    {% if stale %}
+    <section class="panel">
+      <div class="panel-head"><h2>Отметьте итог прошедших встреч</h2></div>
+      <ul class="agenda">{% for mt in stale %}{{ meeting_line(mt, show_date=true) }}{% endfor %}</ul>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="panel-head"><h2>Ближайшие 7 дней</h2></div>
+      {% if upcoming %}
+      <ul class="agenda">{% for mt in upcoming %}{{ meeting_line(mt, show_date=true) }}{% endfor %}</ul>
+      {% else %}
+      <p class="empty">Неделя свободна. Самое время позвонить контактам из Marktpotenzial.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Кому позвонить</h2><a href="{{ url_for('main.contacts', sort='next') }}">Все напоминания</a></div>
+      {% if followups %}
+      <ul class="item-list">
+        {% for c in followups %}
+        <li>
+          {{ temp(c['temperature'], short=true) }}
+          <span class="grow"><a class="row-link" href="{{ url_for('main.contact', cid=c['id']) }}">{{ c['first_name'] }} {{ c['last_name'] or '' }}</a>
+            <span class="muted small">{{ c['next_action'] or 'Связаться' }}</span></span>
+          <span class="chip {{ 'danger' if c['next_action_date'] < today().isoformat() else 'outline' }}">{{ c['next_action_date']|d }}</span>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p class="empty">Напоминаний на ближайшие дни нет.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Kontaktpyramide</h2><a href="{{ url_for('main.contacts') }}">Marktpotenzial</a></div>
+      {% if m.contacts %}
+      {{ pyramid(m.temps) }}
+      <p class="pyr-foot">Чем ближе человек, тем выше шанс встречи: очень горячие 1 из 1, холодные 1 из 20.</p>
+      {% else %}
+      <p class="empty">Пирамида пустая. <a href="{{ url_for('main.contacts') }}">Добавьте первых людей</a>: семья, друзья, коллеги.</p>
+      {% endif %}
+    </section>
+
+    {% if birthdays %}
+    <section class="panel">
+      <div class="panel-head"><h2>Дни рождения в команде</h2></div>
+      <ul class="item-list">
+        {% for b in birthdays %}
+        <li><span class="grow"><a class="row-link" href="{{ url_for('main.person', pid=b.p['id']) }}">{{ b.p|fullname }}</a></span>
+          <span class="muted small">{{ b.age }} {{ plural(b.age, 'год', 'года', 'лет') }}</span>
+          <span class="chip {{ 'ok' if b.date == today() else 'outline' }}">{{ 'сегодня' if b.date == today() else b.date|d }}</span></li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </div>
+</div>
+
+{% if team %}
+<section class="panel flush" style="margin-top:20px">
+  <div class="panel-head"><h2>Команда за {{ month_label|lower }}</h2><a href="{{ url_for('main.stats', scope='team') }}">Подробная статистика</a></div>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr><th>Партнёр</th><th class="num">Встречи</th><th class="num">Оформлено</th><th class="num hide-m">€</th><th class="hide-m">На что обратить внимание</th></tr></thead>
+    <tbody>
+    {% for t in team %}
+      <tr>
+        <td><a class="row-link" href="{{ url_for('main.person', pid=t.p['id']) }}">{{ t.p|fullname }}</a>
+          <span class="sub">{{ t.p['stufe'] }}{% if t.size > 1 %}, ветка {{ t.size }} {{ plural(t.size, 'человек', 'человека', 'человек') }}{% endif %}</span></td>
+        <td class="num">{{ t.m.done }} / {{ t.m.planned }}</td>
+        <td class="num">{{ t.m.deal_ke|num(1) }} KE</td>
+        <td class="num hide-m">{{ t.m.eur_deals|eur }}</td>
+        <td class="hide-m">{% if t.signals %}<ul class="signals">{% for s in t.signals[:2] %}<li>{{ s }}</li>{% endfor %}{% if t.signals|length > 2 %}<li>и ещё {{ t.signals|length - 2 }}</li>{% endif %}</ul>
+          {% else %}<ul class="signals none"><li>Всё в порядке</li></ul>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

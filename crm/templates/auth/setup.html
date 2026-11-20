@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% block title %}Первичная настройка{% endblock %}
+{% block bare %}
+<form method="post" class="auth-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>Создайте кабинет администратора</h1>
+  <p class="sub">Администратор заводит главных бетроеров и видит всю систему. Обычно это вы.</p>
+  <div class="form-grid">
+    <label class="field"><span class="field-label">Имя</span><input type="text" name="first_name" required value="{{ form.get('first_name', '') }}"></label>
+    <label class="field"><span class="field-label">Фамилия</span><input type="text" name="last_name" required value="{{ form.get('last_name', '') }}"></label>
+    <label class="field"><span class="field-label">Ступень</span>
+      <select name="stufe" data-coefs='{{ C.STUFE_DEFAULT_COEF|tojson }}'>
+        {% for code, name, coef in C.STUFEN %}<option value="{{ code }}"{% if form.get('stufe') == code %} selected{% endif %}>{{ name }}</option>{% endfor %}
+      </select></label>
+    <label class="field"><span class="field-label">€ за 1 KE</span><input type="text" inputmode="decimal" name="coef" value="{{ form.get('coef', '1') }}"></label>
+    <label class="field wide"><span class="field-label">Телефон</span><input type="tel" name="phone" value="{{ form.get('phone', '') }}"></label>
+    <label class="field wide"><span class="field-label">E-mail для входа</span><input type="email" name="email" required value="{{ form.get('email', '') }}"></label>
+    <label class="field"><span class="field-label">Пароль</span><input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+    <label class="field"><span class="field-label">Пароль ещё раз</span><input type="password" name="password2" required minlength="8" autocomplete="new-password"></label>
+  </div>
+  <div class="form-actions"><button class="btn primary block">Создать кабинет</button></div>
+</form>
+{% endblock %}

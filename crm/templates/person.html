@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon with context %}
+{% block title %}{{ p|fullname }}{% endblock %}
+{% block content %}
+{% set is_me = p['id'] == g.user['id'] %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.team') }}">Команда</a>{% if parent %} / <a href="{{ url_for('main.person', pid=parent['id']) }}">{{ parent|fullname }}</a>{% endif %}</p>
+    <h1>{{ p|fullname }}{% if not p['active'] %} <span class="chip">Неактивен</span>{% endif %}</h1>
+    <p class="sub">{{ p['stufe']|label(C.STUFEN) }}{% if p['coef'] is not none %}, {{ p['coef']|num(2) }} € за 1 KE{% else %}, коэффициент не указан{% endif %}</p>
+  </div>
+  <div class="actions">
+    <a class="btn" href="{{ url_for('main.contacts', person=p['id']) }}">Marktpotenzial</a>
+    <a class="btn" href="{{ url_for('main.planner', person=p['id']) }}">Планер</a>
+    <a class="btn" href="{{ url_for('main.stats', person=p['id']) }}">Статистика</a>
+    {% if manage %}<a class="btn primary" href="{{ url_for('main.person_edit', pid=p['id']) }}">{{ icon('edit') }}Изменить</a>
+    {% elif is_me %}<a class="btn primary" href="{{ url_for('auth.account') }}">{{ icon('edit') }}Мой профиль</a>{% endif %}
+  </div>
+</header>
+
+{% if invite %}
+<div class="invite-box" role="status">
+  <b>Ссылка для входа в кабинет готова.</b> Отправьте её {{ p['first_name'] }} в WhatsApp или по почте. Действует до {{ invite.expires[:10]|d('dmy') }}, сработает один раз.
+  <div class="copy"><input type="text" id="invite-link" readonly value="{{ invite.link }}"><button class="btn" type="button" data-copy="invite-link">{{ icon('link') }}Скопировать</button></div>
+</div>
+{% endif %}
+
+<dl class="kpis" aria-label="Показатели за {{ period_label|lower }}">
+  <div><dt>Лично: встречи</dt><dd>{{ own.done }} <small>из {{ own.planned }}</small></dd><span class="sub">{{ period_label }}</span></div>
+  <div><dt>Лично: оформлено</dt><dd>{{ own.deal_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ own.eur_deals|eur }}</span></div>
+  <div><dt>Потенциал</dt><dd>{{ own.potential_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ own.contacts }} {{ plural(own.contacts, 'контакт', 'контакта', 'контактов') }}</span></div>
+  {% if branch_size > 1 %}
+  <div><dt>Вся ветка: оформлено</dt><dd>{{ total.deal_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ total.eur_deals|eur }}, {{ branch_size }} {{ plural(branch_size, 'человек', 'человека', 'человек') }}</span></div>
+  {% endif %}
+</dl>
+
+<div class="grid-2">
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>На что обратить внимание</h2></div>
+      {% if sig %}<ul class="signals">{% for s in sig %}<li>{{ s }}</li>{% endfor %}</ul>
+      {% else %}<ul class="signals none"><li>Слабых мест не видно: есть встречи, план и Marktpotenzial.</li></ul>{% endif %}
+    </section>
+
+    <section class="panel{{ ' flush' if kids }}">
+      <div class="panel-head"><h2>Прямые партнёры</h2>
+        <a href="{{ url_for('main.person_new', parent=p['id']) }}">Добавить партнёра</a></div>
+      {% if kids %}
+      <div class="table-wrap"><table class="table">
+        <thead><tr><th>Имя</th><th>Ступень</th><th>Телефон</th></tr></thead>
+        <tbody>{% for k in kids %}
+          <tr class="{{ '' if k['active'] else 'inactive' }}"><td><a class="row-link" href="{{ url_for('main.person', pid=k['id']) }}">{{ k|fullname }}</a></td>
+          <td>{{ k['stufe'] }}</td><td>{% if k['phone'] %}<a href="tel:{{ k['phone'] }}">{{ k['phone'] }}</a>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      {% else %}
+      <p class="empty">Пока никого. Партнёры, которых добавит {{ p['first_name'] }}, появятся здесь и в вашей статистике.</p>
+      {% endif %}
+    </section>
+  </div>
+
+  <div>
+    <section class="panel">
+      <div class="panel-head"><h2>Данные</h2></div>
+      <dl class="dl">
+        <dt>Телефон</dt><dd>{% if p['phone'] %}<a href="tel:{{ p['phone'] }}">{{ p['phone'] }}</a>{% else %}—{% endif %}</dd>
+        <dt>E-mail</dt><dd>{{ p['email'] or '—' }}</dd>
+        <dt>Дата рождения</dt><dd>{% if p['birth_date'] %}{{ p['birth_date']|d('long') }}, {{ p['birth_date']|age }} {{ plural(p['birth_date']|age, 'год', 'года', 'лет') }}{% else %}—{% endif %}</dd>
+        <dt>В бизнесе с</dt><dd>{{ p['start_date']|d('long') if p['start_date'] else '—' }}</dd>
+        <dt>Цель KE в месяц</dt><dd>{{ p['goal_ke_month']|num if p['goal_ke_month'] else '—' }}</dd>
+        <dt>Наставник</dt><dd>{% if parent %}<a href="{{ url_for('main.person', pid=parent['id']) }}">{{ parent|fullname }}</a>{% else %}верхний уровень{% endif %}</dd>
+        {% if p['note'] %}<dt>Заметка</dt><dd style="white-space: pre-line">{{ p['note'] }}</dd>{% endif %}
+      </dl>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Кабинет</h2></div>
+      {% if p['password_hash'] %}
+        <p>Кабинет открыт{% if p['last_login'] %}, последний вход {{ p['last_login'][:10]|d('dmy') }}{% endif %}.</p>
+      {% elif p['invite_hash'] %}
+        <p>Приглашение отправлено, действует до {{ p['invite_expires'][:10]|d('dmy') }}. Кабинет ещё не создан.</p>
+      {% else %}
+        <p class="ink-2">Кабинета нет: данные этого человека ведёте вы. Откройте кабинет, чтобы он сам вёл контакты, встречи и свою команду.</p>
+      {% endif %}
+      {% if manage and p['active'] %}
+      <div class="form-actions">
+        <form method="post" action="{{ url_for('main.person_invite', pid=p['id']) }}" class="inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn{{ ' primary' if not p['password_hash'] }}">{{ icon('link') }}{{ 'Новая ссылка для входа' if p['password_hash'] or p['invite_hash'] else 'Открыть кабинет' }}</button>
+        </form>
+      </div>
+      {% endif %}
+      {% if manage and not is_me %}
+      <div class="form-actions">
+        <form method="post" action="{{ url_for('main.person_active', pid=p['id']) }}" class="inline"
+              {% if p['active'] %}data-confirm="Закрыть доступ для {{ p|fullname }}? Данные сохранятся, вход станет невозможен."{% endif %}>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn ghost">{{ 'Деактивировать' if p['active'] else 'Активировать снова' }}</button>
+        </form>
+        <span class="spacer"></span>
+        <form method="post" action="{{ url_for('main.person_delete', pid=p['id']) }}" class="inline" data-confirm="Удалить {{ p|fullname }} из структуры?">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn danger">Удалить</button>
+        </form>
+      </div>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

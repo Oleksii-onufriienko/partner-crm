@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<header class="page-head"><div><h1>{{ title }}</h1><p class="sub">{{ text }}</p></div></header>
+<a class="btn" href="{{ url_for('main.dashboard') }}">На главную</a>
+{% endblock %}
+{% block bare %}
+<div class="auth-card"><h1>{{ title }}</h1><p class="sub">{{ text }}</p>
+<a class="btn block" href="{{ url_for('auth.login') }}">Ко входу</a></div>
+{% endblock %}

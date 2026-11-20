@@ -1,0 +1,4 @@
+crm.example.de {
+    encode gzip
+    reverse_proxy crm:8000
+}

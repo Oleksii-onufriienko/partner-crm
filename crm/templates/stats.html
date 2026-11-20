@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, pyramid, person_select with context %}
+{% block title %}Статистика{% endblock %}
+{% block content %}
+{% set is_me = p['id'] == g.user['id'] %}
+{% set base = {'person': p['id'], 'period': key, 'from': request.args.get('from', ''), 'to': request.args.get('to', '')} %}
+<header class="page-head">
+  <div>
+    <h1>Статистика{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <p class="sub">{{ label }}. Суммы в € считаются по коэффициенту каждого человека.</p>
+  </div>
+  {% if branch_size > 1 %}
+  <nav class="tabs" aria-label="Чьи цифры">
+    <a href="{{ url_for('main.stats', scope='me', **base) }}"{% if scope == 'me' %} aria-current="true"{% endif %}>Лично</a>
+    <a href="{{ url_for('main.stats', scope='team', **base) }}"{% if scope == 'team' %} aria-current="true"{% endif %}>Вся структура, {{ branch_size }}</a>
+  </nav>
+  {% endif %}
+</header>
+
+<form class="toolbar" method="get">
+  {% if options|length > 1 %}{{ person_select('person', options, p['id'], attrs='data-autosubmit aria-label="Чья статистика"') }}{% endif %}
+  <input type="hidden" name="scope" value="{{ scope }}">
+  <select name="period" data-autosubmit aria-label="Период">
+    {% for k, t in periods %}<option value="{{ k }}"{% if k == key %} selected{% endif %}>{{ t }}</option>{% endfor %}
+  </select>
+  {% if key == 'custom' %}
+  <input type="date" name="from" value="{{ start.isoformat() }}" aria-label="С" style="width:auto">
+  <input type="date" name="to" value="{{ end.isoformat() }}" aria-label="По" style="width:auto">
+  <button class="btn">Показать</button>
+  {% else %}<noscript><button class="btn">Показать</button></noscript>{% endif %}
+</form>
+
+{% set s = shown %}
+<dl class="kpis" aria-label="Показатели">
+  <div><dt>Marktpotenzial</dt><dd>{{ s.contacts|num }}</dd><span class="sub">+{{ s.new_contacts }} новых, {{ s.clients }} {{ plural(s.clients, 'клиент', 'клиента', 'клиентов') }}</span></div>
+  <div><dt>Клиентский потенциал</dt><dd>{{ s.potential_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_potential|eur }}</span></div>
+  <div><dt>Встречи проведены</dt><dd>{{ s.done }} <small>из {{ s.planned }}</small></dd><span class="sub">{% set r = rate(s.done, s.planned) %}{{ (r ~ '% от плана') if r is not none else 'нет плана' }}{% if s.cancelled %}, {{ s.cancelled }} отменено{% endif %}</span></div>
+  <div><dt>Результат по плану</dt><dd>{{ s.expected_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_expected|eur }}</span></div>
+  <div><dt>Результат факт</dt><dd>{{ s.deal_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_deals|eur }}, {{ s.deals }} {{ plural(s.deals, 'сделка', 'сделки', 'сделок') }}</span></div>
+</dl>
+{% if s.coef_missing %}<div class="flashes"><div class="flash error">У {{ s.coef_missing }} {{ plural(s.coef_missing, 'человека', 'человек', 'человек') }} не указан коэффициент €/KE — их KE не попали в суммы в €.</div></div>{% endif %}
+
+<div class="grid-2">
+  <section class="panel">
+    <div class="panel-head"><h2>Активность за период</h2><span class="muted small">{{ 'вся структура' if scope == 'team' else 'лично' }}</span></div>
+    {% set fmax = [1] + funnel|map(attribute=1)|list %}{% set fmax = fmax|max %}
+    <div class="bars" role="table" aria-label="Активность за период">
+      {% for name, n in funnel %}
+      <div class="bar-row" role="row" title="{{ name }}: {{ n }}">
+        <span class="lbl" role="cell">{{ name }}</span>
+        <span class="bar-track" role="presentation"><span class="bar{% if not n %} zero{% endif %}" style="--w: {{ (100 * n / fmax)|round(1) }}%"></span></span>
+        <span class="n" role="cell">{{ n }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <p class="pyr-foot">Считаются только проведённые встречи соответствующего этапа и сделки с датой в периоде.</p>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Kontaktpyramide</h2><span class="muted small">{{ s.contacts }} {{ plural(s.contacts, 'контакт', 'контакта', 'контактов') }}</span></div>
+    {{ pyramid(s.temps) }}
+  </section>
+</div>
+
+{% if partners %}
+<section class="panel flush" style="margin-top: 20px">
+  <div class="panel-head"><h2>По партнёрам</h2><span class="muted small">Каждая строка — партнёр вместе со своей веткой</span></div>
+  <div class="table-wrap">
+  <table class="table">
+    <thead><tr>
+      <th>Партнёр</th><th class="num hide-m">Людей</th><th class="num hide-m">Контакты</th><th class="num">Потенциал, KE</th>
+      <th class="num">Встречи</th><th class="num hide-m">%</th><th class="num">План, KE</th><th class="num">Факт, KE</th><th class="num">Факт, €</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><a class="row-link" href="{{ url_for('main.stats', person=p['id'], period=key) }}">{{ p|fullname }}</a><span class="sub">лично</span></td>
+        <td class="num hide-m">1</td><td class="num hide-m">{{ own.contacts }}</td><td class="num">{{ own.potential_ke|num(1) }}</td>
+        <td class="num">{{ own.done }} / {{ own.planned }}</td><td class="num hide-m">{{ rate(own.done, own.planned) if own.planned else '—' }}</td>
+        <td class="num">{{ own.expected_ke|num(1) }}</td><td class="num">{{ own.deal_ke|num(1) }}</td><td class="num">{{ own.eur_deals|eur }}</td>
+      </tr>
+      {% for x in partners %}{% set m = x.m %}
+      <tr class="{{ '' if x.p['active'] else 'inactive' }}">
+        <td><a class="row-link" href="{{ url_for('main.stats', person=x.p['id'], period=key, scope='team' if x.size > 1 else 'me') }}">{{ x.p|fullname }}</a><span class="sub">{{ x.p['stufe'] }}</span></td>
+        <td class="num hide-m">{{ x.size }}</td><td class="num hide-m">{{ m.contacts }}</td><td class="num">{{ m.potential_ke|num(1) }}</td>
+        <td class="num">{{ m.done }} / {{ m.planned }}</td><td class="num hide-m">{{ rate(m.done, m.planned) if m.planned else '—' }}</td>
+        <td class="num">{{ m.expected_ke|num(1) }}</td><td class="num">{{ m.deal_ke|num(1) }}</td><td class="num">{{ m.eur_deals|eur }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr>
+      <td>Вся структура</td><td class="num hide-m">{{ total.people }}</td><td class="num hide-m">{{ total.contacts }}</td><td class="num">{{ total.potential_ke|num(1) }}</td>
+      <td class="num">{{ total.done }} / {{ total.planned }}</td><td class="num hide-m">{{ rate(total.done, total.planned) if total.planned else '—' }}</td>
+      <td class="num">{{ total.expected_ke|num(1) }}</td><td class="num">{{ total.deal_ke|num(1) }}</td><td class="num">{{ total.eur_deals|eur }}</td>
+    </tr></tfoot>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="panel" style="margin-top: 20px">
+  <div class="panel-head"><h2>Слабые места</h2><span class="muted small">на сегодня</span></div>
+  {% if weak %}
+  <ul class="item-list">
+    {% for who, sigs in weak %}
+    <li style="align-items: flex-start"><a class="row-link" style="min-width: 190px" href="{{ url_for('main.person', pid=who['id']) }}">{{ who|fullname }}</a>
+      <ul class="signals grow">{% for x in sigs %}<li>{{ x }}</li>{% endfor %}</ul></li>
+    {% endfor %}
+  </ul>
+  {% else %}<ul class="signals none"><li>Слабых мест не найдено.</li></ul>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, seg, person_select, options as opts with context %}
+{% block title %}{{ 'Встреча' if m else 'Новая встреча' }}{% endblock %}
+{% macro v(key, default='') -%}
+{%- if key in form -%}{{ form[key] }}{%- elif m and m[key] is not none -%}{{ m[key] }}{%- else -%}{{ default }}{%- endif -%}
+{%- endmacro %}
+{% block content %}
+{% set back = safe_next(url_for('main.planner', person=owner_id)) %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.planner', person=owner_id) }}">Планер</a></p>
+    <h1>{{ 'Встреча' if m else 'Новая встреча' }}</h1>
+    {% if m and m['created_by'] and m['created_by'] != m['owner_id'] %}<p class="sub">Запланировал наставник.</p>{% endif %}
+  </div>
+</header>
+<form method="post" class="panel" style="max-width: 860px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="next" value="{{ request.values.get('next', '') }}">
+  <div class="form-grid">
+    {% if options|length > 1 %}
+    <label class="field wide"><span class="field-label">Чья встреча</span>
+      {{ person_select('owner_id', options, owner_id, attrs='data-owner-reload' if not m else '') }}
+      {% if not m %}<span class="field-hint">Бетроер может планировать встречи для своих партнёров.</span>{% endif %}</label>
+    {% else %}<input type="hidden" name="owner_id" value="{{ owner_id }}">{% endif %}
+
+    <label class="field"><span class="field-label">Контакт из Marktpotenzial</span>
+      <select name="contact_id"><option value="">— без контакта —</option>
+        {% set sel = v('contact_id') %}
+        {% for c in contacts %}<option value="{{ c['id'] }}"{% if c['id']|string == sel|string %} selected{% endif %}>{{ c['last_name'] or '' }} {{ c['first_name'] }}</option>{% endfor %}
+      </select></label>
+    <label class="field"><span class="field-label">Или кратко: с кем / что</span><input type="text" name="title" value="{{ v('title') }}" placeholder="Например: тим-митинг, спортзал"></label>
+
+    <label class="field"><span class="field-label">Дата</span><input type="date" name="date" required value="{{ v('date', today().isoformat()) }}"></label>
+    <div class="form-grid" style="gap: 14px 12px">
+      <label class="field"><span class="field-label">Время</span><input type="time" name="time" value="{{ v('time') }}"></label>
+      <label class="field"><span class="field-label">Минут</span><input type="number" name="duration_min" min="0" step="15" value="{{ v('duration_min') }}"></label>
+    </div>
+
+    <div class="field wide"><span class="field-label">Формат</span>{{ seg('format', C.FORMATS, v('format', 'offline')) }}</div>
+    <label class="field"><span class="field-label">Этап</span><select name="stage">{{ opts(C.STAGES, v('stage', 'first')) }}</select></label>
+    <label class="field"><span class="field-label">Ожидаемый результат, KE</span><input type="text" inputmode="decimal" name="expected_ke" value="{{ v('expected_ke') }}"></label>
+    <div class="field wide"><span class="field-label">Статус</span>{{ seg('status', C.MEETING_STATUSES, v('status', 'planned')) }}</div>
+    <label class="field wide"><span class="field-label">Заметка / итог</span><textarea name="note" rows="3" placeholder="Что подготовить, о чём договорились">{{ v('note') }}</textarea></label>
+  </div>
+  <div class="form-actions">
+    <button class="btn primary">{{ 'Сохранить' if m else 'Запланировать' }}</button>
+    <a class="btn ghost" href="{{ back }}">Отмена</a>
+  </div>
+</form>
+{% if m %}
+<form method="post" action="{{ url_for('main.meeting_delete', mid=m['id']) }}" data-confirm="Удалить встречу?" style="margin-top: 12px">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn danger small">Удалить встречу</button>
+</form>
+{% endif %}
+{% endblock %}

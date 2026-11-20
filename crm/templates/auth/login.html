@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Вход{% endblock %}
+{% block bare %}
+<form method="post" class="auth-card">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <h1>Вход в кабинет</h1>
+  <p class="sub">Доступ выдаёт ваш наставник: он присылает ссылку-приглашение.</p>
+  <label class="field"><span class="field-label">E-mail</span>
+    <input type="email" name="email" autocomplete="username" required autofocus value="{{ request.form.get('email', '') }}"></label>
+  <label class="field"><span class="field-label">Пароль</span>
+    <input type="password" name="password" autocomplete="current-password" required></label>
+  <button class="btn primary block">Войти</button>
+  <p class="foot-note">Забыли пароль? Попросите наставника создать новую ссылку для входа.</p>
+</form>
+{% endblock %}

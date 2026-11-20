@@ -1,0 +1,77 @@
+{% macro icon(name) -%}
+<svg class="i" viewBox="0 0 24 24" aria-hidden="true">
+{%- if name == 'today' -%}<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/><path d="m9 15 2 2 4-4"/>
+{%- elif name == 'contacts' -%}<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.8c1.9.7 3.1 2.4 3.5 5.2"/>
+{%- elif name == 'planner' -%}<rect x="3.5" y="4.5" width="17" height="16" rx="2"/><path d="M3.5 9.5h17M8 2.5v4M16 2.5v4M8 13.5h2M14 13.5h2M8 17h2"/>
+{%- elif name == 'team' -%}<rect x="9" y="2.5" width="6" height="5" rx="1.2"/><rect x="2.5" y="16.5" width="6" height="5" rx="1.2"/><rect x="15.5" y="16.5" width="6" height="5" rx="1.2"/><path d="M12 7.5v4.5M5.5 16.5V12h13v4.5"/>
+{%- elif name == 'stats' -%}<path d="M4 20V11M10 20V5M16 20v-6M21.5 20h-19"/>
+{%- elif name == 'moon' -%}<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>
+{%- elif name == 'sun' -%}<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>
+{%- elif name == 'logout' -%}<path d="M15 4h3.5a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5H15M10 16.5 14.5 12 10 7.5M14.5 12H3.5"/>
+{%- elif name == 'plus' -%}<path d="M12 5v14M5 12h14"/>
+{%- elif name == 'phone' -%}<path d="M5 3.5h3.2l1.6 4.3-2.2 1.4a11 11 0 0 0 7.2 7.2l1.4-2.2 4.3 1.6V19a1.5 1.5 0 0 1-1.5 1.5A16.5 16.5 0 0 1 3.5 5 1.5 1.5 0 0 1 5 3.5z"/>
+{%- elif name == 'link' -%}<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>
+{%- elif name == 'chev-l' -%}<path d="m14.5 6-6 6 6 6"/>
+{%- elif name == 'chev-r' -%}<path d="m9.5 6 6 6-6 6"/>
+{%- elif name == 'edit' -%}<path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"/>
+{%- endif -%}
+</svg>
+{%- endmacro %}
+
+{% macro temp(key, short=false) -%}
+<span class="temp t-{{ key }}" title="{{ key|label(C.TEMPERATURES) }}"><i></i>{% if not short %}<span class="tl">{{ key|label(C.TEMPERATURES) }}</span>{% endif %}</span>
+{%- endmacro %}
+
+{% macro status_chip(status) -%}
+{% set cls = {'new': 'outline', 'appointment': 'ok', 'in_work': 'ok', 'followup': 'warn', 'no_chance': ''}[status] %}
+<span class="chip {{ cls }}">{{ status|label(C.CONTACT_STATUSES) }}</span>
+{%- endmacro %}
+
+{% macro options(opts, selected) -%}
+{% for o in opts %}<option value="{{ o[0] }}"{% if o[0]|string == selected|string %} selected{% endif %}>{{ o[1] }}</option>{% endfor %}
+{%- endmacro %}
+
+{% macro person_select(name, opts, selected, empty=none, attrs='') -%}
+<select name="{{ name }}" {{ attrs|safe }}>
+{% if empty %}<option value="">{{ empty }}</option>{% endif %}
+{% for p, depth in opts %}<option value="{{ p['id'] }}"{% if p['id']|string == selected|string %} selected{% endif %}>{{ ' ' * depth }}{{ p|fullname }}{% if p['id'] == g.user['id'] %} (я){% endif %}</option>{% endfor %}
+</select>
+{%- endmacro %}
+
+{% macro seg(name, opts, selected, show_temp=false) -%}
+<div class="seg" role="radiogroup">
+{% for o in opts %}<label><input type="radio" name="{{ name }}" value="{{ o[0] }}"{% if o[0] == selected %} checked{% endif %}><span>{% if show_temp %}<span class="temp t-{{ o[0] }}"><i></i></span>{% endif %}{{ o[1] }}</span></label>{% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro pyramid(temps) -%}
+{% set mx = [1] + temps.values()|list %}
+{% set mx = mx|max %}
+<div class="pyramid" role="table" aria-label="Kontaktpyramide">
+{% for key, name, de, hint in C.TEMPERATURES %}
+{% set n = temps.get(key, 0) %}
+  <div class="pyr-row" role="row" title="{{ name }} ({{ de }}): {{ hint }}">
+    <span class="lbl" role="cell">{{ name }}</span>
+    <span class="pyr-track" role="presentation"><span class="pyr-bar t-{{ key }}{% if not n %} zero{% endif %}" style="--w: {{ (100 * n / mx)|round(1) }}%"></span></span>
+    <span class="n" role="cell">{{ n }}</span>
+  </div>
+{% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro meeting_line(m, show_date=false) -%}
+{% set who = (m['cf'] ~ ' ' ~ (m['cl'] or '')) if m['cf'] else (m['title'] or '') %}
+<li class="{{ m['status'] }}">
+  <span class="when">{% if show_date %}{{ m['date']|d('dm') }}<small>{{ m['time'] or 'весь день' }}</small>{% else %}{{ m['time'] or '—' }}{% endif %}</span>
+  <span class="what"><a href="{{ url_for('main.meeting_edit', mid=m['id'], next=request.full_path) }}">{{ who.strip() or 'Без названия' }}</a>
+    <span class="sub">{{ m['stage']|label(C.STAGES) }}, {{ m['format']|label(C.FORMATS)|lower }}{% if m['expected_ke'] %}, ожидается {{ m['expected_ke']|num(1) }} KE{% endif %}</span></span>
+  {% if m['status'] == 'planned' and m['date'] <= today().isoformat() %}
+  <form method="post" action="{{ url_for('main.meeting_status', mid=m['id']) }}" class="inline">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <button class="btn small" name="status" value="done">Проведена</button>
+  </form>
+  {% elif m['status'] == 'planned' %}<span></span>
+  {% else %}<span class="chip {{ 'ok' if m['status'] == 'done' else '' }}">{{ m['status']|label(C.MEETING_STATUSES) }}</span>{% endif %}
+</li>
+{%- endmacro %}
