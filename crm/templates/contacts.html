@@ -1,33 +1,40 @@
 {% extends 'base.html' %}
 {% from '_ui.html' import icon, temp, status_chip, person_select, options as opts with context %}
 {% block title %}Marktpotenzial{% endblock %}
+{% macro th(key, label, cls='') -%}
+<th class="{{ cls }}"{% if sort == key %} aria-sort="{{ 'ascending' if direction == 'asc' else 'descending' }}"{% endif %}><a class="sort{{ ' on' if sort == key }}" href="{{ sort_links[key] }}">{{ label }}<span class="arr" aria-hidden="true">{% if sort == key %}{{ '↑' if direction == 'asc' else '↓' }}{% else %}↕{% endif %}</span></a></th>
+{%- endmacro %}
 {% block content %}
 {% set a = request.args %}
 {% set is_me = owner['id'] == g.user['id'] %}
 <header class="page-head">
   <div>
-    <h1>Marktpotenzial{% if not is_me %}: {{ owner|fullname }}{% endif %}</h1>
+    <h1>Marktpotenzial</h1>
     <p class="sub">{{ totals['n'] }} {{ plural(totals['n'], 'человек', 'человека', 'человек') }}, из них {{ totals['clients'] or 0 }} {{ plural(totals['clients'] or 0, 'клиент', 'клиента', 'клиентов') }}.
       {% if totals['n'] < C.MIN_MARKTPOTENZIAL %}Для старта по AK1 стоит выписать хотя бы {{ C.MIN_MARKTPOTENZIAL }}.{% endif %}</p>
   </div>
   <div class="actions"><a class="btn primary" href="{{ url_for('main.contact_new', person=owner['id']) }}">{{ icon('plus') }}Контакт с деталями</a></div>
 </header>
 
-<form class="toolbar" method="get" role="search">
-  {% if options|length > 1 %}{{ person_select('person', options, owner['id'], attrs='data-autosubmit aria-label="Чей Marktpotenzial"') }}{% endif %}
-  <input type="search" name="q" value="{{ a.get('q', '') }}" placeholder="Имя, телефон, профессия" aria-label="Поиск">
-  <select name="temperature" data-autosubmit aria-label="Температура"><option value="">Любая температура</option>{{ opts(C.TEMPERATURES, a.get('temperature', '')) }}</select>
-  <select name="status" data-autosubmit aria-label="Статус"><option value="">Любой статус</option>{{ opts(C.CONTACT_STATUSES, a.get('status', '')) }}</select>
-  <select name="kind" data-autosubmit aria-label="Тип"><option value="">Все типы</option>{{ opts(C.KINDS, a.get('kind', '')) }}</select>
+<form class="filters" method="get" role="search" aria-label="Фильтры">
+  <input type="hidden" name="person" value="{{ owner['id'] }}">
+  <input type="hidden" name="sort" value="{{ sort }}">
+  <input type="hidden" name="dir" value="{{ direction }}">
+  <input type="search" name="q" value="{{ a.get('q', '') }}" placeholder="Имя, телефон, профессия, комментарий" aria-label="Поиск" class="f-search">
+  <select name="temperature" data-autosubmit aria-label="Температура"{% if a.get('temperature') %} class="on"{% endif %}><option value="">Температура: любая</option>{{ opts(C.TEMPERATURES, a.get('temperature', '')) }}</select>
+  <select name="status" data-autosubmit aria-label="Статус"{% if a.get('status') %} class="on"{% endif %}><option value="">Статус: любой</option>{{ opts(C.CONTACT_STATUSES, a.get('status', '')) }}</select>
+  <select name="kind" data-autosubmit aria-label="Тип"{% if a.get('kind') %} class="on"{% endif %}><option value="">Тип: все</option>{{ opts(C.KINDS, a.get('kind', '')) }}</select>
+  <select name="channel" data-autosubmit aria-label="Канал"{% if a.get('channel') %} class="on"{% endif %}><option value="">Канал: любой</option>{{ opts(C.CHANNELS, a.get('channel', '')) }}</select>
+  <select name="reminder" data-autosubmit aria-label="Напоминание"{% if a.get('reminder') %} class="on"{% endif %}><option value="">Напоминание: все</option>{{ opts([('overdue', 'Просрочено'), ('week', 'На 7 дней вперёд'), ('any', 'Есть дата'), ('none', 'Без даты')], a.get('reminder', '')) }}</select>
+  <select name="potential" data-autosubmit aria-label="Потенциал"{% if a.get('potential') %} class="on"{% endif %}><option value="">Потенциал: все</option>{{ opts([('yes', 'Есть потенциал'), ('no', 'Без потенциала')], a.get('potential', '')) }}</select>
+  <select name="deals" data-autosubmit aria-label="Сделки"{% if a.get('deals') %} class="on"{% endif %}><option value="">Сделки: все</option>{{ opts([('yes', 'Есть сделки'), ('no', 'Без сделок')], a.get('deals', '')) }}</select>
+  <span class="f-age"><input type="number" name="age_from" min="0" max="120" value="{{ a.get('age_from', '') }}" placeholder="Возраст от" aria-label="Возраст от"><input type="number" name="age_to" min="0" max="120" value="{{ a.get('age_to', '') }}" placeholder="до" aria-label="Возраст до"></span>
   <label class="check small"><input type="checkbox" name="partner" value="1" data-autosubmit{% if a.get('partner') %} checked{% endif %}><span>Интерес к партнёрству</span></label>
-  <span class="grow"></span>
-  <select name="sort" data-autosubmit aria-label="Сортировка">
-    {{ opts([('name', 'По фамилии'), ('temp', 'По температуре'), ('next', 'По напоминанию'), ('potential', 'По потенциалу'), ('new', 'Сначала новые')], sort) }}
-  </select>
-  <noscript><button class="btn">Показать</button></noscript>
-  {% if filtered %}<a class="btn ghost" href="{{ url_for('main.contacts', person=owner['id']) }}">Сбросить</a>{% endif %}
+  <button class="btn small">Применить</button>
+  {% if filtered %}<a class="btn small ghost" href="{{ url_for('main.contacts', person=owner['id'], sort=sort, dir=direction) }}">Сбросить фильтры</a>{% endif %}
 </form>
 
+{% if filtered %}<p class="filter-count">Показано {{ rows|length }} из {{ totals['n'] }}.</p>{% endif %}
 <section class="panel flush">
   <form method="post" class="quick-add" aria-label="Быстро добавить контакт">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -43,8 +50,9 @@
   {% if rows %}
   <div class="table-wrap">
   <table class="table">
-    <thead><tr><th>Имя</th><th>Телефон</th><th>Температура</th><th class="hide-m">Канал</th><th>Статус</th>
-      <th class="num">Потенциал</th><th class="num hide-m">Оформлено</th><th class="hide-m">Напомнить</th></tr></thead>
+    <thead><tr>
+      {{ th('name', 'Имя') }}{{ th('phone', 'Телефон') }}{{ th('temp', 'Температура') }}{{ th('channel', 'Канал', 'hide-m') }}{{ th('status', 'Статус') }}
+      {{ th('potential', 'Потенциал', 'num') }}{{ th('deals', 'Оформлено', 'num hide-m') }}{{ th('next', 'Напомнить', 'hide-m') }}</tr></thead>
     <tbody>
     {% for c in rows %}
       <tr>
@@ -67,5 +75,5 @@
   <p class="empty" style="padding: 18px 22px">{% if filtered %}Под фильтр никто не подходит.{% else %}Запишите всех, кого знаете: семья, друзья, коллеги, соседи, бывшие одноклассники. Каждого — одной строкой выше, детали можно добавить потом.{% endif %}</p>
   {% endif %}
 </section>
-<p class="foot-note">Потенциал и «оформлено» — в KE. Дата напоминания подсвечена, если срок прошёл.</p>
+<p class="foot-note">Нажмите на заголовок столбца, чтобы отсортировать; повторный клик — в обратном порядке. Потенциал и «оформлено» — в KE. Дата напоминания подсвечена, если срок прошёл.</p>
 {% endblock %}

@@ -85,8 +85,9 @@ def branch_ids(pid):
     return out
 
 
-def tree_rows():
-    """Плоский список (person, depth) в порядке обхода дерева — для таблиц и select."""
+def tree_rows(root_id=None):
+    """Плоский список (person, depth) в порядке обхода дерева — для таблиц и select.
+    root_id — показать только ветку этого человека."""
     cmap = children_map()
     out = []
 
@@ -95,7 +96,7 @@ def tree_rows():
         for c in cmap.get(p["id"], []):
             walk(c, depth + 1)
 
-    for r in roots():
+    for r in ([visible_persons()[root_id]] if root_id else roots()):
         walk(r, 0)
     return out
 

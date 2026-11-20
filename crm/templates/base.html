@@ -1,4 +1,4 @@
-{% from '_ui.html' import icon with context %}
+{% from '_ui.html' import icon, person_select with context %}
 <!doctype html>
 <html lang="ru">
 <head>
@@ -54,6 +54,17 @@
     </div>
   </aside>
   <main class="page">
+    {% if view_options %}
+    {% set other = view_person['id'] != g.user['id'] %}
+    <form class="viewbar{{ ' other' if other }}" method="get" action="{{ url_for('main.view_as') }}" role="search" aria-label="Чьи данные показывать">
+      <span class="avatar">{{ view_person|initials }}</span>
+      <label class="viewbar-label" for="viewbar-person">{{ 'Смотрю данные партнёра' if other else 'Мои данные' }}</label>
+      {{ person_select('person', view_options, view_person['id'], attrs='id="viewbar-person" data-autosubmit') }}
+      <input type="hidden" name="next" value="{{ view_next }}">
+      <noscript><button class="btn small">Показать</button></noscript>
+      {% if other %}<a class="btn small ghost" href="{{ url_for('main.view_as', person=g.user['id'], next=view_next) }}">Вернуться к себе</a>{% endif %}
+    </form>
+    {% endif %}
     {% with msgs = get_flashed_messages(with_categories=true) %}{% if msgs %}
     <div class="flashes" role="status">{% for cat, msg in msgs %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}</div>
     {% endif %}{% endwith %}

@@ -5,7 +5,7 @@
 {% set is_me = p['id'] == g.user['id'] %}
 <header class="page-head">
   <div>
-    <h1>Планер на 6 недель{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <h1>Планер на 6 недель</h1>
     <p class="sub">{{ start|d('long') }} – {{ end|d('long') }}. Нажмите на день, чтобы запланировать встречу.</p>
   </div>
   <div class="actions">
@@ -16,14 +16,7 @@
   </div>
 </header>
 
-{% if options|length > 1 %}
-<form class="toolbar" method="get">
-  <label class="field-label" for="pl-person">Чей план</label>
-  {{ person_select('person', options, p['id'], attrs='id="pl-person" data-autosubmit') }}
-  <input type="hidden" name="start" value="{{ start.isoformat() }}">
-  <noscript><button class="btn">Показать</button></noscript>
-</form>
-{% endif %}
+
 
 <div class="planner">
   <div class="pl-row pl-head" aria-hidden="true">{% for wd in WEEKDAYS %}<div>{{ wd }}</div>{% endfor %}<div>Неделя</div></div>

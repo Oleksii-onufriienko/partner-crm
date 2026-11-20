@@ -7,7 +7,7 @@
 {% set mkey = month.strftime('%Y-%m') %}
 <header class="page-head">
   <div>
-    <h1>План и факт{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <h1>План и факт</h1>
     <p class="sub">{{ month_name(month) }}{% if scope == 'team' %}, вся структура ({{ branch_size }} {{ plural(branch_size, 'человек', 'человека', 'человек') }}){% endif %}. Недели с понедельника, как в Erfolgsjournal.</p>
   </div>
   <div class="actions">
@@ -19,7 +19,7 @@
 </header>
 
 <form class="toolbar" method="get">
-  {% if options|length > 1 %}{{ person_select('person', options, p['id'], attrs='data-autosubmit aria-label="Чей план"') }}{% endif %}
+  <input type="hidden" name="person" value="{{ p['id'] }}">
   <input type="hidden" name="month" value="{{ mkey }}">
   <input type="hidden" name="scope" value="{{ scope }}">
   <noscript><button class="btn">Показать</button></noscript>

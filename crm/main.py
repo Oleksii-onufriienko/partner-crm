@@ -19,8 +19,66 @@ bp = Blueprint("main", __name__)
 # ---------------------------------------------------------------- helpers
 
 def _pid_arg(name="person"):
+    """Чьи данные смотрим. Явный ?person= переключает просмотр и запоминается в сессии;
+    без него остаёмся на том, кого выбрали раньше (панель «Просматриваю» вверху)."""
+    vis = visible_ids()
     pid = parse_int(request.values.get(name))
-    return pid if pid is not None else g.user["id"]
+    if pid is not None:
+        if pid not in vis:
+            abort(404)
+        session["view_pid"] = pid
+        return pid
+    sp = session.get("view_pid")
+    return sp if sp in vis else g.user["id"]
+
+
+def _set_view(pid):
+    if pid in visible_ids():
+        session["view_pid"] = pid
+
+
+# Куда вернуться после смены партнёра в панели вверху: списки остаются теми же,
+# страницы конкретной записи (контакт, встреча, форма) — переходят к своему разделу.
+VIEW_LANDING = {
+    "main.contact": "main.contacts", "main.contact_new": "main.contacts",
+    "main.meeting_new": "main.planner", "main.meeting_edit": "main.planner",
+    "main.plan_edit": "main.plan", "main.person_new": "main.team",
+    "auth.account": "main.dashboard",
+}
+VIEW_KEEP = {"main.dashboard", "main.contacts", "main.planner", "main.plan", "main.stats", "main.team"}
+
+
+@bp.app_context_processor
+def inject_view():
+    if not getattr(g, "user", None):
+        return {}
+    opts = person_options()
+    if len(opts) < 2:
+        return {"view_person": g.user, "view_options": None}
+    vp = visible_persons()
+    pid = session.get("view_pid")
+    view = vp.get(pid) if pid in vp else g.user
+    ep = request.endpoint or ""
+    if ep in VIEW_KEEP:
+        args = {k: v for k, v in request.args.items() if k != "person"}
+        nxt = url_for(ep, **args)
+    elif ep in ("main.person", "main.person_edit"):
+        nxt = "__person__"
+    else:
+        nxt = url_for(VIEW_LANDING.get(ep, "main.dashboard"))
+    return {"view_person": view, "view_options": opts, "view_next": nxt}
+
+
+@bp.route("/view")
+@login_required
+def view_as():
+    pid = parse_int(request.args.get("person"))
+    if pid is None or pid not in visible_ids():
+        abort(404)
+    session["view_pid"] = pid
+    if request.args.get("next") == "__person__":
+        return redirect(url_for("main.person", pid=pid))
+    return redirect(safe_next(url_for("main.dashboard")))
 
 
 def get_contact(cid):
@@ -46,7 +104,7 @@ def _choice(value, options, default):
 @bp.route("/")
 @login_required
 def dashboard():
-    me = g.user
+    me = get_person(_pid_arg())
     t = today()
     ms, me_ = month_bounds(t)
     metrics = S.compute([me], ms, me_)[me["id"]]
@@ -88,7 +146,8 @@ def dashboard():
 
     # Дни рождения в структуре на ближайшие 14 дней
     birthdays = []
-    for p in visible_persons().values():
+    vp_all = visible_persons()
+    for p in (vp_all[i] for i in branch_ids(me["id"])):
         bd = parse_date(p["birth_date"])
         if not bd or p["id"] == me["id"] or not p["active"]:
             continue
@@ -107,7 +166,7 @@ def dashboard():
     week_view = P.view(week_grid, wk)
     has_week_plan = any(c["soll"] is not None for c in week_grid[wk[0].isoformat()].values())
 
-    return render_template("dashboard.html", m=metrics, today_meetings=today_meetings,
+    return render_template("dashboard.html", p=me, m=metrics, today_meetings=today_meetings,
                            week_summary=week_view["summary"], has_week_plan=has_week_plan,
                            upcoming=upcoming, stale=stale, followups=followups, team=team,
                            birthdays=birthdays, month_label=S.period_from_args({})[3])
@@ -120,14 +179,15 @@ def dashboard():
 def team():
     t = today()
     ms, me_ = month_bounds(t)
-    rows = tree_rows()
+    root = get_person(_pid_arg())
+    rows = tree_rows() if root["id"] == g.user["id"] else tree_rows(root["id"])
     show_inactive = request.args.get("all") == "1"
     if not show_inactive:
         rows = [(p, d) for p, d in rows if p["active"]]
     per = S.compute([p for p, _ in rows], ms, me_)
     sig = S.signals([p for p, _ in rows])
     cmap = children_map()
-    return render_template("team.html", rows=rows, per=per, sig=sig, cmap=cmap,
+    return render_template("team.html", rows=rows, per=per, sig=sig, cmap=cmap, root=root,
                            show_inactive=show_inactive)
 
 
@@ -200,6 +260,7 @@ def person_new():
 @login_required
 def person(pid):
     p = get_person(pid)
+    _set_view(pid)
     key, start, end, label = S.period_from_args(request.args)
     b = branch_ids(pid)
     vp = visible_persons()
@@ -286,14 +347,26 @@ def person_delete(pid):
 
 # ---------------------------------------------------------------- Marktpotenzial
 
+# Сортировка по столбцам: ключ → (SQL-выражение, направление по умолчанию)
+_TEMP_ORDER = "CASE c.temperature WHEN 'very_hot' THEN 0 WHEN 'hot' THEN 1 WHEN 'warm' THEN 2 " \
+              "WHEN 'lukewarm' THEN 3 ELSE 4 END"
+_STATUS_ORDER = "CASE c.status WHEN 'new' THEN 0 WHEN 'appointment' THEN 1 WHEN 'in_work' THEN 2 " \
+                "WHEN 'followup' THEN 3 ELSE 4 END"
+_CHANNEL_ORDER = "CASE c.channel WHEN 'warm' THEN 0 WHEN 'recommendation' THEN 1 ELSE 2 END"
 CONTACT_SORTS = {
-    "name": "c.last_name COLLATE NOCASE, c.first_name COLLATE NOCASE",
-    "new": "c.created_at DESC",
-    "next": "c.next_action_date IS NULL, c.next_action_date",
-    "potential": "potential_ke DESC",
-    "temp": "CASE c.temperature WHEN 'very_hot' THEN 0 WHEN 'hot' THEN 1 WHEN 'warm' THEN 2 "
-            "WHEN 'lukewarm' THEN 3 ELSE 4 END, c.last_name COLLATE NOCASE",
+    "name": ("c.last_name COLLATE NOCASE {d}, c.first_name COLLATE NOCASE {d}", "asc"),
+    "phone": ("c.phone IS NULL, c.phone {d}", "asc"),
+    "temp": (_TEMP_ORDER + " {d}", "asc"),
+    "channel": (_CHANNEL_ORDER + " {d}", "asc"),
+    "status": (_STATUS_ORDER + " {d}", "asc"),
+    "potential": ("potential_ke {d}", "desc"),
+    "deals": ("deal_ke {d}", "desc"),
+    "next": ("c.next_action_date IS NULL, c.next_action_date {d}", "asc"),
+    "age": ("c.age IS NULL, c.age {d}", "asc"),
+    "new": ("c.created_at {d}", "desc"),
 }
+CONTACT_FILTER_KEYS = ("q", "kind", "status", "temperature", "channel", "partner", "reminder",
+                       "potential", "deals", "age_from", "age_to")
 
 
 @bp.route("/contacts", methods=["GET", "POST"])
@@ -317,12 +390,13 @@ def contacts():
         return redirect(safe_next(url_for("main.contacts", person=pid)))
 
     a = request.args
+    t = today().isoformat()
     where, args = ["c.owner_id = ?"], [pid]
     q = (a.get("q") or "").strip()
     if q:
         where.append("(c.first_name LIKE ? OR c.last_name LIKE ? OR c.phone LIKE ? "
-                      "OR c.profession LIKE ? OR c.comment LIKE ?)")
-        args += [f"%{q}%"] * 5
+                     "OR c.profession LIKE ? OR c.comment LIKE ? OR c.recommended_by LIKE ?)")
+        args += [f"%{q}%"] * 6
     for fld, opts in (("kind", C.KINDS), ("status", C.CONTACT_STATUSES),
                       ("temperature", C.TEMPERATURES), ("channel", C.CHANNELS)):
         if a.get(fld) in C.keys(opts):
@@ -330,19 +404,56 @@ def contacts():
             args.append(a[fld])
     if a.get("partner") == "1":
         where.append("c.partner_interest = 1")
+    reminder = a.get("reminder")
+    if reminder == "overdue":
+        where.append("c.next_action_date < ? AND c.status != 'no_chance'")
+        args.append(t)
+    elif reminder == "week":
+        where.append("c.next_action_date BETWEEN ? AND ?")
+        args += [t, (today() + dt.timedelta(days=7)).isoformat()]
+    elif reminder == "any":
+        where.append("c.next_action_date IS NOT NULL")
+    elif reminder == "none":
+        where.append("c.next_action_date IS NULL")
+    if a.get("potential") == "yes":
+        where.append("EXISTS (SELECT 1 FROM potentials WHERE contact_id = c.id)")
+    elif a.get("potential") == "no":
+        where.append("NOT EXISTS (SELECT 1 FROM potentials WHERE contact_id = c.id)")
+    if a.get("deals") == "yes":
+        where.append("EXISTS (SELECT 1 FROM deals WHERE contact_id = c.id)")
+    elif a.get("deals") == "no":
+        where.append("NOT EXISTS (SELECT 1 FROM deals WHERE contact_id = c.id)")
+    for key, op in (("age_from", ">="), ("age_to", "<=")):
+        v = parse_int(a.get(key))
+        if v is not None:
+            where.append(f"c.age {op} ?")
+            args.append(v)
+
     sort = a.get("sort") if a.get("sort") in CONTACT_SORTS else "name"
+    expr, default_dir = CONTACT_SORTS[sort]
+    direction = a.get("dir") if a.get("dir") in ("asc", "desc") else default_dir
+    order = expr.format(d=direction.upper())
+    if sort != "name":
+        order += ", c.last_name COLLATE NOCASE, c.first_name COLLATE NOCASE"
     rows = query(
         f"""SELECT c.*,
                (SELECT COALESCE(SUM(ke), 0) FROM potentials WHERE contact_id = c.id) potential_ke,
                (SELECT COALESCE(SUM(ke), 0) FROM deals WHERE contact_id = c.id) deal_ke
-            FROM contacts c WHERE {' AND '.join(where)} ORDER BY {CONTACT_SORTS[sort]}""", args)
+            FROM contacts c WHERE {' AND '.join(where)} ORDER BY {order}""", args)
     totals = query("""SELECT COUNT(*) n, SUM(kind = 'client') clients FROM contacts
                       WHERE owner_id = ?""", (pid,), one=True)
-    temps = {r["temperature"]: r["n"] for r in query(
-        "SELECT temperature, COUNT(*) n FROM contacts WHERE owner_id = ? GROUP BY temperature", (pid,))}
-    filtered = any(a.get(k) for k in ("q", "kind", "status", "temperature", "channel", "partner"))
-    return render_template("contacts.html", owner=owner, rows=rows, totals=totals, temps=temps,
-                           sort=sort, filtered=filtered, options=person_options())
+
+    # Ссылки для заголовков: клик — сортировать, повторный клик — в обратную сторону
+    base = {k: v for k, v in a.items() if k not in ("sort", "dir")}
+    base["person"] = pid
+    sort_links = {}
+    for key, (_, dflt) in CONTACT_SORTS.items():
+        nd = ("desc" if direction == "asc" else "asc") if key == sort else dflt
+        sort_links[key] = url_for("main.contacts", sort=key, dir=nd, **{k: v for k, v in base.items()})
+    filtered = any(a.get(k) for k in CONTACT_FILTER_KEYS)
+    return render_template("contacts.html", owner=owner, rows=rows, totals=totals, sort=sort,
+                           direction=direction, sort_links=sort_links, filtered=filtered,
+                           options=person_options())
 
 
 CONTACT_FIELDS = ["first_name", "last_name", "phone", "email", "age", "profession", "channel",
@@ -403,6 +514,7 @@ def contact_new():
 @login_required
 def contact(cid):
     c = get_contact(cid)
+    _set_view(c["owner_id"])
     form = request.form
     if request.method == "POST":
         data, err = _contact_form_data(form)
@@ -593,6 +705,7 @@ def meeting_new():
 @login_required
 def meeting_edit(mid):
     m = get_meeting(mid)
+    _set_view(m["owner_id"])
     form = request.form
     if request.method == "POST":
         data, err = _meeting_form_data(form)
@@ -653,13 +766,15 @@ def stats():
     sig = S.signals([vp[i] for i in b])
     weak = [(vp[i], sig[i]) for i in b if sig.get(i) and vp[i]["active"]]
 
+    chart = S.activity_series(b if scope == "team" else [pid], start, end)
+
     funnel = [("Новые контакты", shown["new_contacts"])] + \
              [(C.label(C.STAGES, s), shown["stage_done"][s]) for s in C.FUNNEL_STAGES] + \
              [("Оформленные сделки", shown["deals"])]
 
     return render_template("stats.html", p=p, key=key, start=start, end=end, label=label,
                            own=own, total=total, shown=shown, scope=scope, partners=partners,
-                           weak=weak, funnel=funnel, branch_size=len(b), periods=S.PERIODS,
+                           weak=weak, funnel=funnel, branch_size=len(b), periods=S.PERIODS, chart=chart,
                            options=person_options(), rate=S.rate)
 
 

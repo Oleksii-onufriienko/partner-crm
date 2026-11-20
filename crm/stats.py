@@ -196,3 +196,72 @@ def signals(persons):
             lst.append("Не указан коэффициент €/KE")
         out[pid] = lst
     return out
+
+
+# Ряды для графика активности: (ключ, подпись)
+SERIES = [
+    ("new_contacts", "Новые контакты"),
+    ("first", "Первый термин"),
+    ("analysis", "Анализ"),
+    ("consult", "Бератунг"),
+    ("closing", "Заключение сделки"),
+    ("deals", "Оформленные сделки"),
+]
+
+
+def _bucket_key(d, mode):
+    if mode == "day":
+        return d
+    if mode == "week":
+        return d - dt.timedelta(days=d.weekday())
+    return d.replace(day=1)
+
+
+def activity_series(ids, start, end):
+    """Активность по дням (до 3 месяцев), по неделям (до ~13 месяцев) или по месяцам.
+    Возвращает {"mode", "labels": [iso], "series": [{"key", "label", "values"}]}."""
+    days = (end - start).days + 1
+    mode = "day" if days <= 92 else ("week" if days <= 400 else "month")
+    buckets = []
+    d = _bucket_key(start, mode)
+    while d <= end:
+        buckets.append(d)
+        if mode == "day":
+            d += dt.timedelta(days=1)
+        elif mode == "week":
+            d += dt.timedelta(days=7)
+        else:
+            d = (d.replace(day=28) + dt.timedelta(days=4)).replace(day=1)
+    index = {b: i for i, b in enumerate(buckets)}
+    values = {k: [0] * len(buckets) for k, _ in SERIES}
+
+    def add(key, date_str):
+        dd = parse_date(date_str)
+        if dd is None or dd < start or dd > end:
+            return
+        i = index.get(_bucket_key(dd, mode))
+        if i is not None:
+            values[key][i] += 1
+
+    if ids:
+        marks = ",".join("?" * len(ids))
+        s, e = start.isoformat(), end.isoformat()
+        for r in query(f"""SELECT date(created_at) d FROM contacts
+                           WHERE owner_id IN ({marks}) AND date(created_at) BETWEEN ? AND ?""", [*ids, s, e]):
+            add("new_contacts", r["d"])
+        for r in query(f"""SELECT stage, date FROM meetings
+                           WHERE owner_id IN ({marks}) AND status = 'done' AND format != 'private'
+                                 AND stage IN ('first', 'analysis', 'consult', 'closing')
+                                 AND date BETWEEN ? AND ?""", [*ids, s, e]):
+            add(r["stage"], r["date"])
+        for r in query(f"""SELECT d.date FROM deals d JOIN contacts c ON c.id = d.contact_id
+                           WHERE c.owner_id IN ({marks}) AND d.date BETWEEN ? AND ?""", [*ids, s, e]):
+            add("deals", r["date"])
+
+    # Дни, которые ещё не наступили, — без значения: линия обрывается на сегодняшнем дне
+    t = today()
+    for k in values:
+        values[k] = [None if b > t else v for b, v in zip(buckets, values[k])]
+    return {"mode": mode, "labels": [b.isoformat() for b in buckets],
+            "series": [{"key": k, "label": lbl, "values": values[k],
+                        "total": sum(v for v in values[k] if v)} for k, lbl in SERIES]}

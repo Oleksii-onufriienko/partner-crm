@@ -2,15 +2,16 @@
 {% from '_ui.html' import icon, meeting_line, pyramid, temp, status_chip with context %}
 {% block title %}Сегодня{% endblock %}
 {% block content %}
-{% set u = g.user %}
+{% set u = p %}
+{% set is_me = p['id'] == g.user['id'] %}
 <header class="page-head">
   <div>
     <h1>{{ today()|d('weekday')|capitalize }}</h1>
-    <p class="sub">{{ u['first_name'] }}, вот что у вас сегодня и как идёт {{ month_label|lower }}.</p>
+    <p class="sub">{% if is_me %}{{ u['first_name'] }}, вот что у вас сегодня и как идёт {{ month_label|lower }}.{% else %}День партнёра: встречи, звонки и {{ month_label|lower }}.{% endif %}</p>
   </div>
   <div class="actions">
-    <a class="btn" href="{{ url_for('main.contact_new') }}">{{ icon('plus') }}Контакт</a>
-    <a class="btn primary" href="{{ url_for('main.meeting_new', date=today().isoformat()) }}">{{ icon('plus') }}Встреча</a>
+    <a class="btn" href="{{ url_for('main.contact_new', person=p['id']) }}">{{ icon('plus') }}Контакт</a>
+    <a class="btn primary" href="{{ url_for('main.meeting_new', person=p['id'], date=today().isoformat()) }}">{{ icon('plus') }}Встреча</a>
   </div>
 </header>
 
@@ -69,7 +70,7 @@
         {% endfor %}
       </div>
       {% else %}
-      <p class="empty">План на эту неделю не заполнен. <a href="{{ url_for('main.plan_edit') }}">Заполнить план</a>: сколько первых терминов, бератунгов и KE вы хотите сделать.</p>
+      <p class="empty">План на эту неделю не заполнен. <a href="{{ url_for('main.plan_edit', person=p['id']) }}">Заполнить план</a>: сколько первых терминов, бератунгов и KE вы хотите сделать.</p>
       {% endif %}
     </section>
 

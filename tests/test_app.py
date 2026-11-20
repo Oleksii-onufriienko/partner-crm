@@ -242,6 +242,73 @@ class PlanTest(Base):
             self.assertEqual(total["br_held"]["soll"], 10)
 
 
+class ViewContextTest(Base):
+    def test_selected_partner_sticks_across_menu(self):
+        c = self.client_for("irina@demo.local")
+        koch, me = self.pid("Кох"), self.pid("Ланге")
+        c.get(f"/view?person={koch}&next=/contacts")
+        for url in ("/contacts", "/planner", "/plan", "/stats", "/"):
+            page = c.get(url).data.decode()
+            self.assertIn(f'<option value="{koch}" selected', page, url)       # вверху выбран Кох
+        page = c.get("/contacts").data.decode()
+        import sqlite3
+        name = sqlite3.connect(self.db).execute(
+            "SELECT first_name FROM contacts WHERE owner_id=? ORDER BY last_name LIMIT 1", (koch,)).fetchone()[0]
+        self.assertIn(name, page)
+        r = c.get(f"/view?person={me}&next=/planner")
+        self.assertEqual(r.headers["Location"], "/planner")
+        self.assertIn(f'<option value="{me}" selected', c.get("/planner").data.decode())
+
+    def test_cannot_view_foreign_partner(self):
+        c = self.client_for("irina@demo.local")
+        self.assertEqual(c.get(f"/view?person={self.pid('Шмидт')}").status_code, 404)
+
+    def test_open_redirect_blocked(self):
+        c = self.client_for("irina@demo.local")
+        r = c.get(f"/view?person={self.pid('Ланге')}&next=//evil.example")
+        self.assertEqual(r.headers["Location"], "/")
+
+
+class ContactsListTest(Base):
+    def test_sorting_and_filters(self):
+        c = self.client_for("admin@demo.local")
+        for key in ("name", "phone", "temp", "channel", "status", "potential", "deals", "next", "age", "new"):
+            for d in ("asc", "desc"):
+                self.assertEqual(c.get(f"/contacts?sort={key}&dir={d}").status_code, 200)
+        for q in ("reminder=overdue", "reminder=week", "reminder=none", "potential=yes", "deals=no",
+                  "age_from=30&age_to=40", "channel=recommendation&kind=client", "sort=bad&dir=bad"):
+            self.assertEqual(c.get(f"/contacts?{q}").status_code, 200, q)
+        page = c.get("/contacts?age_from=200").data.decode()
+        self.assertIn("Под фильтр никто не подходит", page)
+
+    def test_potential_sort_desc(self):
+        import re
+        c = self.client_for("admin@demo.local")
+        page = c.get("/contacts?sort=potential&dir=desc").data.decode()
+        cells = re.findall(r'<td class="num">([\d\s\u202f,]+|—)</td>', page)
+        nums = [float(x.replace("\u202f", "").replace(",", ".")) for x in cells[::2] if x != "—"]
+        self.assertEqual(nums, sorted(nums, reverse=True))
+
+
+class ChartTest(Base):
+    def test_activity_series(self):
+        import datetime as dt
+        with self.app.app_context():
+            from crm import stats as S
+            ids = [self.pid("Берг")]
+            r = S.activity_series(ids, dt.date(2026, 11, 1), dt.date(2026, 11, 30))
+            self.assertEqual(r["mode"], "day")
+            self.assertEqual(len(r["labels"]), 30)
+            self.assertEqual([s["key"] for s in r["series"]],
+                             ["new_contacts", "first", "analysis", "consult", "closing", "deals"])
+            y = S.activity_series(ids, dt.date(2026, 1, 1), dt.date(2026, 12, 31))
+            self.assertEqual(y["mode"], "week")
+            future = S.activity_series(ids, dt.date(2031, 1, 1), dt.date(2031, 1, 10))
+            self.assertTrue(all(v is None for v in future["series"][0]["values"]))
+        c = self.client_for("admin@demo.local")
+        self.assertIn(b'data-chart=', c.get("/stats?period=year&scope=team").data)
+
+
 class MigrationTest(unittest.TestCase):
     def test_old_database_gets_new_columns(self):
         import sqlite3

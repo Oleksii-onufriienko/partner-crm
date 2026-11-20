@@ -6,7 +6,7 @@
 {% set base = {'person': p['id'], 'period': key, 'from': request.args.get('from', ''), 'to': request.args.get('to', '')} %}
 <header class="page-head">
   <div>
-    <h1>Статистика{% if not is_me %}: {{ p|fullname }}{% endif %}</h1>
+    <h1>Статистика</h1>
     <p class="sub">{{ label }}. Суммы в € считаются по коэффициенту каждого человека.</p>
   </div>
   {% if branch_size > 1 %}
@@ -18,7 +18,7 @@
 </header>
 
 <form class="toolbar" method="get">
-  {% if options|length > 1 %}{{ person_select('person', options, p['id'], attrs='data-autosubmit aria-label="Чья статистика"') }}{% endif %}
+  <input type="hidden" name="person" value="{{ p['id'] }}">
   <input type="hidden" name="scope" value="{{ scope }}">
   <select name="period" data-autosubmit aria-label="Период">
     {% for k, t in periods %}<option value="{{ k }}"{% if k == key %} selected{% endif %}>{{ t }}</option>{% endfor %}
@@ -39,6 +39,30 @@
   <div><dt>Результат факт</dt><dd>{{ s.deal_ke|num(1) }} <small>KE</small></dd><span class="sub">{{ s.eur_deals|eur }}, {{ s.deals }} {{ plural(s.deals, 'сделка', 'сделки', 'сделок') }}</span></div>
 </dl>
 {% if s.coef_missing %}<div class="flashes"><div class="flash error">У {{ s.coef_missing }} {{ plural(s.coef_missing, 'человека', 'человек', 'человек') }} не указан коэффициент €/KE — их KE не попали в суммы в €.</div></div>{% endif %}
+
+{% set modes = {'day': 'по дням', 'week': 'по неделям', 'month': 'по месяцам'} %}
+<section class="panel ts" data-chart='{{ chart|tojson }}' style="margin-bottom: 20px">
+  <div class="panel-head"><h2>Активность {{ modes[chart.mode] }}</h2><span class="muted small">{{ 'вся структура' if scope == 'team' else 'лично' }}, {{ label }}</span></div>
+  <div class="ts-legend" role="group" aria-label="Какие линии показывать">
+    {% for sr in chart.series %}
+    <button type="button" class="ts-key" data-key="{{ sr.key }}" aria-pressed="true" style="--c: var(--s{{ loop.index }})"><i aria-hidden="true"></i>{{ sr.label }}<b>{{ sr.total }}</b></button>
+    {% endfor %}
+    <span class="ts-all"><button type="button" class="link-btn" data-all="1">Показать все</button><button type="button" class="link-btn" data-all="0">Скрыть все</button></span>
+  </div>
+  <div class="ts-plot">
+    <svg tabindex="0" role="img" aria-label="График активности {{ modes[chart.mode] }}. Стрелки влево и вправо — значения по датам."></svg>
+    <div class="ts-tip" hidden></div>
+  </div>
+  <details class="ts-table">
+    <summary>Показать таблицей</summary>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>{{ {'day': 'Дата', 'week': 'Неделя с', 'month': 'Месяц'}[chart.mode] }}</th>{% for sr in chart.series %}<th class="num">{{ sr.label }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for lab in chart.labels %}{% set i = loop.index0 %}
+        <tr><td>{{ lab|d('dmy') if chart.mode != 'month' else lab[:7] }}</td>{% for sr in chart.series %}<td class="num">{{ sr['values'][i] if sr['values'][i] else ('' if sr['values'][i] is not none else '·') }}</td>{% endfor %}</tr>
+      {% endfor %}</tbody>
+    </table></div>
+  </details>
+</section>
 
 <div class="grid-2">
   <section class="panel">
