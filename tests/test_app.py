@@ -60,7 +60,10 @@ class PagesTest(Base):
                     f"/contacts/{self.first_contact(self.pid('Ланге'))}", f"/planner?person={self.pid('Ланге')}",
                     f"/stats?person={self.pid('Ланге')}&scope=team", "/plan", "/plan?scope=team",
                     "/plan/edit", "/plan?month=2026-01", f"/plan?person={self.pid('Ланге')}&scope=team",
-                    f"/plan/edit?person={self.pid('Кох')}&month=2030-02"]:
+                    f"/plan/edit?person={self.pid('Кох')}&month=2030-02",
+                    "/team/candidates", "/team/candidates?scope=team", "/team/year", "/team/year?year=2025",
+                    "/team/year/edit", "/team/career", f"/team/career?person={self.pid('Ланге')}",
+                    f"/team/year?person={self.pid('Ланге')}"]:
             r = c.get(url)
             self.assertEqual(r.status_code, 200, url)
             self.assertNotIn(b"Traceback", r.data)
@@ -68,7 +71,8 @@ class PagesTest(Base):
     def test_pages_render_for_vm_without_team(self):
         c = self.client_for("oleg@demo.local")
         for url in ["/", "/team", "/contacts", "/planner", "/stats", "/account", "/meetings/new", "/contacts/new",
-                    "/plan", "/plan/edit", "/plan?scope=team"]:
+                    "/plan", "/plan/edit", "/plan?scope=team", "/team/candidates", "/team/year",
+                    "/team/year/edit", "/team/career", f"/people/{self.pid('Майер')}"]:
             self.assertEqual(c.get(url).status_code, 200, url)
 
     def test_unauthenticated_redirects_to_login(self):
@@ -349,6 +353,149 @@ class WeakSettingsTest(Base):
         c.get("/stats?scope=team&weak=reset")
 
 
+class CareerRulesTest(unittest.TestCase):
+    """Условия повышения по Leistung lohnt sich 2026."""
+    def facts(self, **kw):
+        import datetime as dt
+        f = {"eigen_all": 0, "eigen_12": 0, "eigen_since": 0, "since": dt.date(2026, 1, 1), "gruppe_12": 0,
+             "np_12": 0, "direct_partners": 0, "best3": 0, "last3": 0}
+        f.update(kw)
+        return f
+
+    def plan(self, stufe, **kw):
+        from crm import career as K
+        return K.plan_for({"stufe": stufe}, self.facts(**kw))
+
+    def test_next_targets(self):
+        from crm import career as K
+        self.assertEqual(K.next_targets("VM"), ["VBAK"])
+        self.assertEqual(K.next_targets("VBAK"), ["AL"])
+        self.assertEqual(K.next_targets("AL"), ["RGS", "P2"])
+        self.assertEqual(K.next_targets("HGS"), ["RD1"])
+        self.assertEqual(K.next_targets("P6"), ["P7"])
+        self.assertEqual(K.next_targets("D"), [])
+
+    def test_vbak_either_450_or_300_and_two_vm(self):
+        self.assertTrue(self.plan("VM", eigen_all=450)[0]["done"])
+        self.assertFalse(self.plan("VM", eigen_all=320, direct_partners=1)[0]["done"])
+        st = self.plan("VM", eigen_all=320, direct_partners=2)[0]
+        self.assertTrue(st["done"])
+        self.assertEqual(st["best"], 1)
+
+    def test_al_needs_600_in_three_months(self):
+        st = self.plan("VBAK", best3=450)[0]
+        self.assertEqual(st["pct"], 75)
+        self.assertTrue(self.plan("VBAK", best3=600)[0]["done"])
+
+    def test_rgs_caps_own_units(self):
+        # 3 000 лично засчитываются только как 2 400: 2 400 + 1 500 группы = 3 900 < 4 000
+        st = self.plan("AL", eigen_12=3000, gruppe_12=1500, np_12=1600)[0]
+        self.assertEqual(st["target"], "RGS")
+        self.assertFalse(st["done"])
+        gesamt = st["options"][0][0]
+        self.assertEqual(gesamt["value"], 3900)
+        self.assertTrue(self.plan("AL", eigen_12=3000, gruppe_12=1600, np_12=1600)[0]["done"])
+        # без 1 800 личных RGS не дают
+        self.assertFalse(self.plan("AL", eigen_12=1700, gruppe_12=3000, np_12=2000)[0]["done"])
+
+    def test_praxis_needs_both_conditions(self):
+        p2 = self.plan("AL", eigen_12=2500, eigen_since=4000)[1]
+        self.assertEqual(p2["target"], "P2")
+        self.assertFalse(p2["done"])
+        self.assertTrue(self.plan("AL", eigen_12=2500, eigen_since=4800)[1]["done"])
+
+
+class GrowthFlowTest(Base):
+    def db_(self):
+        import sqlite3
+        db = sqlite3.connect(self.db)
+        db.row_factory = sqlite3.Row
+        return db
+
+    def test_candidate_funnel_to_partner(self):
+        c = self.client_for("irina@demo.local")
+        irina = self.pid("Ланге")
+        r = c.post(f"/team/candidates?person={irina}", data={"csrf_token": self.csrf(c), "first_name": "Кандида",
+                                                              "last_name": "Тестова", "phone": "+49 000 1"})
+        self.assertEqual(r.status_code, 302)
+        cand = self.db_().execute("SELECT * FROM contacts WHERE last_name = 'Тестова'").fetchone()
+        self.assertEqual(cand["recruit_stage"], "interest")
+        c.post(f"/contacts/{cand['id']}/recruit", data={"csrf_token": self.csrf(c), "stage": "invited",
+                                                         "info_date": "2026-12-03"})
+        cand = self.db_().execute("SELECT * FROM contacts WHERE id = ?", (cand["id"],)).fetchone()
+        self.assertEqual((cand["recruit_stage"], cand["recruit_info_date"]), ("invited", "2026-12-03"))
+        # «Стал партнёром» → форма нового партнёра, заполненная данными кандидата
+        r = c.post(f"/contacts/{cand['id']}/recruit", data={"csrf_token": self.csrf(c), "stage": "joined"})
+        self.assertIn(f"from_contact={cand['id']}", r.headers["Location"])
+        page = c.get(r.headers["Location"]).get_data(as_text=True)
+        self.assertIn('value="Кандида"', page)
+        r = c.post("/people/new", data={"csrf_token": self.csrf(c), "first_name": "Кандида", "last_name": "Тестова",
+                                        "stufe": "VM", "coef": "1", "parent_id": irina,
+                                        "from_contact": cand["id"]})
+        self.assertEqual(r.status_code, 302)
+        db = self.db_()
+        new = db.execute("SELECT * FROM persons WHERE last_name = 'Тестова'").fetchone()
+        cand = db.execute("SELECT * FROM contacts WHERE id = ?", (cand["id"],)).fetchone()
+        self.assertEqual((cand["recruit_stage"], cand["joined_person_id"]), ("joined", new["id"]))
+        stages = [r[0] for r in db.execute("SELECT stage FROM recruit_log WHERE contact_id = ? ORDER BY id",
+                                           (cand["id"],))]
+        self.assertEqual(stages, ["interest", "invited", "joined"])
+        hist = db.execute("SELECT stufe, kind FROM stufe_history WHERE person_id = ?", (new["id"],)).fetchall()
+        self.assertEqual([tuple(h) for h in hist], [("VM", "start")])
+        # Новый VM попал в годовой план Ирины как «новый VM напрямую»
+        page = c.get(f"/team/year?person={irina}").get_data(as_text=True)
+        self.assertIn("Новые VM", page)
+
+    def test_interest_checkbox_makes_candidate(self):
+        c = self.client_for("admin@demo.local")
+        r = c.post("/contacts/new", data={"csrf_token": self.csrf(c), "owner_id": self.pid("Берг"),
+                                          "first_name": "Галочка", "partner_interest": "1"})
+        cid = int(r.headers["Location"].rsplit("/", 1)[1])
+        self.assertEqual(self.db_().execute("SELECT recruit_stage FROM contacts WHERE id = ?", (cid,)).fetchone()[0],
+                         "interest")
+        self.assertIn("Галочка", c.get("/team/candidates").get_data(as_text=True))
+
+    def test_promotion_is_recorded_and_counted(self):
+        import datetime as dt
+        from crm import yearplan as Y
+        c = self.client_for("admin@demo.local")
+        anna = self.pid("Фишер")
+        year = dt.date.today().year
+        when = f"{year}-03-15"
+        r = c.post(f"/people/{anna}/edit", data={"csrf_token": self.csrf(c), "first_name": "Анна", "last_name": "Фишер",
+                                                 "stufe": "VBAK", "coef": "6", "parent_id": self.pid("Шмидт"),
+                                                 "stufe_date": when})
+        self.assertEqual(r.status_code, 302)
+        h = self.db_().execute("SELECT * FROM stufe_history WHERE person_id = ? ORDER BY id DESC", (anna,)).fetchone()
+        self.assertEqual((h["stufe"], h["kind"], h["date"]), ("VBAK", "promotion", when))
+        with self.app.test_request_context():
+            from flask import g
+            from crm.access import children_map, visible_persons
+            from crm.db import query
+            g.user = query("SELECT * FROM persons WHERE email = 'admin@demo.local'", one=True)
+            ist = Y.facts(self.pid("Шмидт"), year, visible_persons(), children_map())
+            self.assertGreaterEqual(ist["vba_direct"][2], 1)
+            ist = Y.facts(self.pid("Берг"), year, visible_persons(), children_map())
+            self.assertGreaterEqual(ist["vba_indirect"][2], 1)
+        self.assertIn("стал(а) VBAK", c.get("/team/career").get_data(as_text=True))
+
+    def test_year_goals_save(self):
+        import datetime as dt
+        c = self.client_for("oleg@demo.local")
+        year = dt.date.today().year + 1
+        data = {"csrf_token": self.csrf(c), "year": year}
+        data.update({f"g_eigen_{m}": "40" for m in range(1, 13)})
+        data["g_vm_direct_6"] = "1"
+        r = c.post(f"/team/year/edit?year={year}", data=data)
+        self.assertEqual(r.status_code, 302)
+        db = self.db_()
+        n = db.execute("SELECT COUNT(*) FROM year_goals WHERE person_id = ? AND year = ?",
+                       (self.pid("Майер"), year)).fetchone()[0]
+        self.assertEqual(n, 13)
+        page = c.get(f"/team/year?year={year}").get_data(as_text=True)
+        self.assertIn("из 480", page)          # 12 × 40 за год
+
+
 class MigrationTest(unittest.TestCase):
     def test_old_database_gets_new_columns(self):
         import sqlite3
@@ -365,6 +512,19 @@ class MigrationTest(unittest.TestCase):
             create_app()
             cols = [r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(deals)")]
             self.assertIn("source", cols)
+            # старые коды ступеней и галочка «интерес» переносятся при запуске
+            db = sqlite3.connect(path)
+            db.execute("INSERT INTO persons (id, first_name, last_name, stufe, start_date) VALUES (1, 'A', 'B', 'VBA', '2024-02-01')")
+            db.execute("INSERT INTO contacts (id, owner_id, first_name, partner_interest) VALUES (1, 1, 'K', 1)")
+            db.execute("DELETE FROM stufe_history")
+            db.commit()
+            create_app()
+            self.assertEqual(db.execute("SELECT stufe FROM persons WHERE id = 1").fetchone()[0], "VBAK")
+            self.assertEqual(db.execute("SELECT stufe, date, kind FROM stufe_history WHERE person_id = 1").fetchall(),
+                             [("VBAK", "2024-02-01", "start")])
+            self.assertEqual(db.execute("SELECT recruit_stage FROM contacts WHERE id = 1").fetchone()[0], "interest")
+            self.assertEqual(db.execute("SELECT COUNT(*) FROM recruit_log WHERE contact_id = 1").fetchone()[0], 1)
+            db.close()
         finally:
             for k, v in (("CRM_DB", old_db), ("CRM_INSTANCE", old_inst)):
                 if v is None:

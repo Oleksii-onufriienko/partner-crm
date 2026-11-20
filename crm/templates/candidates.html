@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, temp, team_tabs, options with context %}
+{% block title %}Кандидаты в партнёры{% endblock %}
+{% block content %}
+{% set here = request.full_path %}
+<header class="page-head">
+  <div>
+    <h1>Кандидаты в партнёры</h1>
+    <p class="sub">{% if p['id'] == g.user['id'] %}{{ 'Мои кандидаты и кандидаты всей моей структуры' if scope == 'team' else 'Мои кандидаты' }}{% else %}{{ p|fullname }}{{ ', вся структура' if scope == 'team' }}{% endif %}: {{ total }} {{ plural(total, 'человек', 'человека', 'человек') }} в воронке. От интереса до входа в структуру, как Potentialliste Partner в AK1.</p>
+  </div>
+</header>
+{{ team_tabs('main.candidates', p['id']) }}
+
+{% if branch_size > 1 %}
+<div class="toolbar">
+  <span class="grow"></span>
+  <nav class="tabs" aria-label="Чьи кандидаты">
+    <a href="{{ url_for('main.candidates', person=p['id'], scope='me') }}"{% if scope == 'me' %} aria-current="true"{% endif %}>Лично</a>
+    <a href="{{ url_for('main.candidates', person=p['id'], scope='team') }}"{% if scope == 'team' %} aria-current="true"{% endif %}>Вся структура</a>
+  </nav>
+</div>
+{% endif %}
+
+{# Воронка: сколько человек когда-либо дошло до этапа и какая доля перешла дальше #}
+{% set order = ['interest', 'invited', 'attended', 'talk', 'joined'] %}
+<section class="panel funnel-panel" aria-labelledby="funnel-h">
+  <div class="panel-head"><h2 id="funnel-h">Воронка</h2><span class="muted small">сколько человек дошло до каждого этапа и сколько из них перешло дальше</span></div>
+  {% set top = [reached['interest'], 1]|max %}
+  <ol class="funnel">
+    {% for key in order %}
+    {% set n = reached[key] %}
+    {% set prev = reached[order[loop.index0 - 1]] if not loop.first else none %}
+    <li>
+      <span class="fn-label">{{ key|label(C.RECRUIT_STAGES) }}</span>
+      <span class="fn-bar"><i style="--w: {{ (100 * n / top)|round(1) }}%"></i></span>
+      <span class="fn-n">{{ n }}</span>
+      <span class="fn-conv">{% if prev %}{{ (100 * n / prev)|round|int }}% из прошлого этапа{% elif not loop.first %}<span class="muted">—</span>{% endif %}</span>
+    </li>
+    {% endfor %}
+  </ol>
+  <dl class="funnel-period">
+    <div><dt>Новых кандидатов</dt><dd>{{ month_counts['interest'] }} <small>в этом месяце</small></dd><span class="sub">{{ year_counts['interest'] }} с начала года</span></div>
+    <div><dt>Были на Karriere-Info</dt><dd>{{ month_counts['attended'] }} <small>в этом месяце</small></dd><span class="sub">{{ year_counts['attended'] }} с начала года</span></div>
+    <div><dt>Карьерных разговоров</dt><dd>{{ month_counts['talk'] }} <small>в этом месяце</small></dd><span class="sub">{{ year_counts['talk'] }} с начала года</span></div>
+    <div><dt>Стали партнёрами</dt><dd>{{ month_counts['joined'] }} <small>в этом месяце</small></dd><span class="sub">{{ year_counts['joined'] }} с начала года</span></div>
+  </dl>
+</section>
+
+<section class="panel quick-cand">
+  <form method="post" action="{{ url_for('main.candidates', person=p['id'], scope=scope) }}" class="quick-row">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <b class="qc-title">Новый кандидат{% if p['id'] != g.user['id'] %} в список: {{ p|fullname }}{% endif %}</b>
+    <label class="field"><span class="field-label">Имя</span><input type="text" name="first_name" required maxlength="80"></label>
+    <label class="field"><span class="field-label">Фамилия</span><input type="text" name="last_name" maxlength="80"></label>
+    <label class="field"><span class="field-label">Телефон</span><input type="tel" name="phone" maxlength="40"></label>
+    <label class="field"><span class="field-label">Профессия</span><input type="text" name="profession" maxlength="120"></label>
+    <label class="field"><span class="field-label">Отношения</span><select name="temperature">{{ options(C.TEMPERATURES, 'warm') }}</select></label>
+    <button class="btn primary">{{ icon('plus') }}Добавить</button>
+  </form>
+  <p class="foot-note">Кандидатом становится и любой контакт в Marktpotenzial с галочкой «Интерес к сотрудничеству».</p>
+</section>
+
+<div class="board" aria-label="Кандидаты по этапам">
+{% for key, name, de in C.RECRUIT_STAGES if key in C.RECRUIT_ACTIVE or key == 'joined' %}
+  {% set items = columns.get(key, []) %}
+  <section class="board-col" aria-labelledby="col-{{ key }}">
+    <header><h2 id="col-{{ key }}">{{ name }}</h2><span class="muted">{{ items|length }}</span><span class="de">{{ de }}</span></header>
+    {% for c in (items[:8] if key == 'joined' else items) %}
+    {% set days = (today - c['since']|todate).days if c['since'] else none %}
+    <article class="cand{{ ' stale' if days is not none and days > 30 and key != 'joined' }}">
+      <a class="cand-name" href="{{ url_for('main.contact', cid=c['id']) }}">{{ temp(c['temperature'], short=true) }}{{ c['first_name'] }} {{ c['last_name'] or '' }}</a>
+      <p class="cand-meta">
+        {% if c['profession'] %}{{ c['profession'] }}<br>{% endif %}
+        {% if scope == 'team' %}у {{ c['of'] }} {{ c['ol'] }}<br>{% endif %}
+        {% if c['recruit_info_date'] and key in ('invited', 'attended') %}Info: {{ c['recruit_info_date']|d('dmy') }}<br>{% endif %}
+        {% if key == 'joined' %}{% if c['since'] %}партнёр с {{ c['since']|d('dmy') }}{% endif %}
+        {% elif days is not none %}на этапе {{ days }} {{ plural(days, 'день', 'дня', 'дней') }}{% endif %}
+      </p>
+      {% if key != 'joined' %}
+      <form method="post" action="{{ url_for('main.contact_recruit', cid=c['id']) }}" class="cand-move">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ here }}">
+        <label class="visually-hidden" for="st-{{ c['id'] }}">Этап для {{ c['first_name'] }}</label>
+        <select id="st-{{ c['id'] }}" name="stage" data-autosubmit>
+          {% for k2, n2, d2 in C.RECRUIT_STAGES %}<option value="{{ k2 }}"{% if k2 == key %} selected{% endif %}>{{ n2 }}</option>{% endfor %}
+        </select>
+        <noscript><button class="btn small">OK</button></noscript>
+      </form>
+      {% elif c['joined_person_id'] %}
+      <a class="small" href="{{ url_for('main.person', pid=c['joined_person_id']) }}">Карточка партнёра</a>
+      {% endif %}
+    </article>
+    {% if loop.last and key == 'joined' and items|length > 8 %}<p class="board-empty">и ещё {{ items|length - 8 }} раньше</p>{% endif %}
+    {% else %}
+    <p class="board-empty">{% if key == 'interest' %}Добавьте людей, которым интересна работа: из Marktpotenzial или формой выше.{% else %}Пусто{% endif %}</p>
+    {% endfor %}
+  </section>
+{% endfor %}
+</div>
+
+{% set declined = columns.get('declined', []) %}
+{% if declined %}
+<details class="panel declined">
+  <summary>Отказались: {{ declined|length }}</summary>
+  <ul class="item-list">
+    {% for c in declined %}<li><a href="{{ url_for('main.contact', cid=c['id']) }}">{{ c['first_name'] }} {{ c['last_name'] or '' }}</a>{% if c['since'] %} <span class="muted">— {{ c['since']|d('dmy') }}</span>{% endif %}{% if scope == 'team' %} <span class="muted">у {{ c['of'] }} {{ c['ol'] }}</span>{% endif %}</li>{% endfor %}
+  </ul>
+</details>
+{% endif %}
+<p class="foot-note">Этап меняется сразу при выборе. «Стал партнёром» откроет форму нового партнёра с данными кандидата. Карточки старше 30 дней на одном этапе подсвечены.</p>
+{% endblock %}

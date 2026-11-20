@@ -1,21 +1,33 @@
 """Справочники CRM. Значения хранятся в БД как ключи (левая колонка),
 подписи для интерфейса — справа. Порядок в списках = порядок в интерфейсе."""
 
-# Ступени карьеры (Stufen) по брошюре AK1 «Ihr Karriereweg bei uns».
-# Третье значение — коэффициент € за 1 KE по умолчанию (Provision je Einheit).
-# Для ступеней выше RGS в брошюре значений нет — их вводит наставник вручную.
+# Ступени карьеры по «Leistung lohnt sich 2026» (Karrieresystem).
+# Третье значение — вознаграждение € за 1 единицу (Vergütung gemäß Provisionsstufe).
+# VM получают Zuführungsprovision 1, 2 или 3 € (по Provisionsstufe) — по умолчанию 1 €, меняется вручную.
 STUFEN = [
-    ("VM", "VM — Vermögensmitarbeiter", 1.0),   # в AK1: 1–3 € за единицу
-    ("VBA", "VBA — Vermögensberater-Assistent", 6.0),
+    ("VM", "VM — Vertrauensmitarbeiter", 1.0),
+    ("VBAS", "VBAS — Vermögensberater-Assistent Service", 4.0),
+    ("VBAK", "VBAK — Vermögensberater-Assistent Karriere", 6.0),
     ("AL", "AL — Agenturleiter", 9.0),
     ("RGS", "RGS — Regionalgeschäftsstellenleiter", 10.0),
-    ("GS", "GS — Geschäftsstellenleiter", None),
-    ("HGS", "HGS — Hauptgeschäftsstellenleiter", None),
-    ("RD", "RD — Regionaldirektor", None),
-    ("D", "D — Direktor", None),
+    ("GS", "GS — Geschäftsstellenleiter", 11.0),
+    ("HGS", "HGS — Hauptgeschäftsstellenleiter", 12.0),
+    ("RD1", "RD1 — Regionaldirektionsleiter 1", 12.6),
+    ("RD2", "RD2 — Regionaldirektionsleiter 2", 13.2),
+    ("D", "D — Direktionsleiter", 14.0),
+    ("P2", "P2 — Praxis 2", 10.0),
+    ("P3", "P3 — Praxis 3", 11.0),
+    ("P4", "P4 — Praxis 4", 12.0),
+    ("P5", "P5 — Praxis 5", 12.6),
+    ("P6", "P6 — Praxis 6", 13.2),
+    ("P7", "P7 — Praxis 7", 13.6),
 ]
 STUFE_CODES = [s[0] for s in STUFEN]
 STUFE_DEFAULT_COEF = {s[0]: s[2] for s in STUFEN}
+# Старшинство ступени (по ставке) — чтобы отличать повышение от перевода
+STUFE_RANK = {s[0]: s[2] for s in STUFEN}
+# Старые коды из первой версии → новые
+STUFE_RENAMES = {"VBA": "VBAK", "RD": "RD1"}
 
 # Канал привлечения контакта
 CHANNELS = [
@@ -141,6 +153,17 @@ PLAN_SUMMARY = [
     ("br_clients", "Новые клиенты"),
     ("ke", "KE всего"),
 ]
+
+# Воронка партнёров (Potentialliste Partner / «Ihr zukünftiges Team» из AK1)
+RECRUIT_STAGES = [
+    ("interest", "Интерес", "Berufsinteressent"),
+    ("invited", "Приглашён на Info", "Einladung zur Karriere-Info"),
+    ("attended", "Был на Info", "Info besucht"),
+    ("talk", "Карьерный разговор", "Anwerbegespräch"),
+    ("joined", "Стал партнёром", "VM geworden"),
+    ("declined", "Отказ", "kein Interesse"),
+]
+RECRUIT_ACTIVE = ["interest", "invited", "attended", "talk"]
 
 # Пороги для «слабых мест» по умолчанию (каждый пользователь может изменить у себя)
 MIN_MARKTPOTENZIAL = 20      # меньше контактов — сигнал

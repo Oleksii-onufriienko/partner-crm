@@ -14,6 +14,8 @@
 </header>
 <form method="post" class="panel" style="max-width: 860px">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if candidate %}<input type="hidden" name="from_contact" value="{{ candidate['id'] }}">
+  <p class="flash" style="margin-bottom: 16px">Кандидат из воронки: {{ candidate['first_name'] }} {{ candidate['last_name'] or '' }}. После сохранения он отметится как «Стал партнёром».</p>{% endif %}
   <div class="form-grid">
     <label class="field"><span class="field-label">Имя</span><input type="text" name="first_name" required value="{{ v('first_name') }}" autofocus></label>
     <label class="field"><span class="field-label">Фамилия</span><input type="text" name="last_name" required value="{{ v('last_name') }}"></label>
@@ -29,7 +31,12 @@
       </select></label>
     <label class="field"><span class="field-label">€ за 1 KE</span>
       <input type="text" inputmode="decimal" name="coef" value="{{ v('coef', '' if person else '1') }}">
-      <span class="field-hint">По AK1: VM 1–3 €, VBA 6 €, AL 9 €, RGS 10 €</span></label>
+      <span class="field-hint">Подставляется по «Leistung lohnt sich 2026». VM: 1, 2 или 3 € по Provisionsstufe.</span></label>
+    {% if person %}
+    <label class="field"><span class="field-label">Дата смены ступени</span>
+      <input type="date" name="stufe_date" value="{{ form.get('stufe_date', today().isoformat()) }}">
+      <span class="field-hint">Нужна, только если меняете ступень: попадёт в историю повышений.</span></label>
+    {% endif %}
     <label class="field"><span class="field-label">Цель KE в месяц</span><input type="text" inputmode="decimal" name="goal_ke_month" value="{{ v('goal_ke_month') }}"></label>
     <label class="field"><span class="field-label">Дата входа в бизнес</span><input type="date" name="start_date" value="{{ v('start_date') }}"></label>
 

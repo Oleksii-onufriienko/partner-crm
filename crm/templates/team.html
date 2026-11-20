@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_ui.html' import icon with context %}
+{% from '_ui.html' import icon, team_tabs with context %}
 {% block title %}Команда{% endblock %}
 {% block content %}
 <header class="page-head">
@@ -10,6 +10,7 @@
     <a class="btn primary" href="{{ url_for('main.person_new', parent=root['id']) }}">{{ icon('plus') }}Добавить партнёра</a>
   </div>
 </header>
+{{ team_tabs('main.team', root['id']) }}
 
 <section class="panel flush">
   <div class="table-wrap">
@@ -27,7 +28,7 @@
           <span><a class="row-link" href="{{ url_for('main.person', pid=p['id']) }}">{{ p|fullname }}</a>{% if p['id'] == g.user['id'] %} <span class="muted">(я)</span>{% endif %}
           {% if cmap.get(p['id']) %}<span class="sub">{{ cmap[p['id']]|length }} {{ plural(cmap[p['id']]|length, 'прямой партнёр', 'прямых партнёра', 'прямых партнёров') }}</span>{% endif %}</span>
         </span></td>
-        <td>{{ p['stufe'] }}</td>
+        <td>{{ p['stufe'] }}{% if career.get(p['id']) and career[p['id']].main %}{% set st = career[p['id']].main %}<span class="sub" title="Прогресс до {{ st.target }}">→ {{ st.target }}: {{ st.pct }}%</span>{% endif %}</td>
         <td class="hide-m">{% if not p['active'] %}<span class="chip">Неактивен</span>
           {% elif p['password_hash'] %}<span class="chip ok">Есть</span>
           {% elif p['invite_hash'] %}<span class="chip warn">Приглашён</span>

@@ -76,3 +76,52 @@
   {% else %}<span class="chip {{ 'ok' if m['status'] == 'done' else '' }}">{{ m['status']|label(C.MEETING_STATUSES) }}</span>{% endif %}
 </li>
 {%- endmacro %}
+
+{% macro team_tabs(active, pid) -%}
+<nav class="tabs team-tabs" aria-label="Разделы команды">
+{% for ep, title in [('main.team', 'Структура'), ('main.candidates', 'Кандидаты'), ('main.year_plan', 'Годовой план'), ('main.career', 'Карьера')] %}
+  <a href="{{ url_for(ep, person=pid) }}"{% if ep == active %} aria-current="page"{% endif %}>{{ title }}</a>
+{% endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro progress(pct, ok=false, label='') -%}
+<span class="progress{{ ' ok' if ok }}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ pct }}"{% if label %} aria-label="{{ label }}"{% endif %}><i style="--w: {{ [pct, 100]|min }}%"></i></span>
+{%- endmacro %}
+
+{% macro career_steps(steps, compact=false) -%}
+{% if not steps %}
+<p class="empty">Это верхняя ступень своего пути — дальше повышений нет.</p>
+{% else %}
+<div class="career{{ ' compact' if compact }}">
+{% for st in (steps|sort(attribute='pct', reverse=true) if compact else steps) %}
+  {% if compact and not loop.first %}
+  <div class="career-step brief"><div class="cs-head"><b>{{ st.target }}</b><span class="cs-title">другой путь{% if st.path %}, {{ st.path }}{% endif %}</span><span class="cs-pct">{{ st.pct }}%</span></div></div>
+  {% else %}
+  <div class="career-step{{ ' done' if st.done }}">
+    <div class="cs-head">
+      <b>{{ st.target }}</b><span class="cs-title">{{ st.title.split(' — ', 1)[1] if ' — ' in st.title else st.title }}{% if st.path %}, путь {{ st.path }}{% endif %}</span>
+      <span class="cs-pct">{% if st.done %}условия выполнены{% else %}{{ st.pct }}%{% endif %}</span>
+    </div>
+    {% if st.note and not compact %}<p class="cs-note">{{ st.note }}</p>{% endif %}
+    {% for opt in st.options %}
+    {% if not compact or loop.index0 == st.best %}
+    {% if st.options|length > 1 and not compact %}<p class="cs-or">{{ 'Вариант ' ~ loop.index }}{% if loop.index0 == st.best %} — ближе всего{% endif %}</p>{% endif %}
+    <ul class="cs-crit">
+      {% for c in opt %}
+      <li class="{{ 'ok' if c.ok }}">
+        <span class="cs-label">{{ c.label }}{% if c.hint %}<span class="sub">{{ c.hint }}</span>{% endif %}</span>
+        <span class="cs-val">{{ c.value|num(0) }} <small>из {{ c.target|num(0) }} {{ c.unit }}</small></span>
+        {{ progress(c.pct, c.ok, c.label) }}
+        <span class="cs-gap">{% if c.ok %}есть{% else %}не хватает {{ (c.target - c.value)|num(0) }}{% endif %}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endfor %}
+</div>
+{% endif %}
+{%- endmacro %}

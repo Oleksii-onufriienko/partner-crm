@@ -41,7 +41,7 @@ def create_app(test_config=None):
     from . import db
     db.init_app(app)
 
-    from . import auth, main
+    from . import auth, main, growth  # noqa: F401  growth добавляет маршруты в main.bp
     app.register_blueprint(auth.bp)
     app.register_blueprint(main.bp)
 
@@ -53,7 +53,7 @@ def create_app(test_config=None):
         month_name=lambda d: f"{U.MONTHS_NOM[d.month - 1].capitalize()} {d.year}")
     app.jinja_env.filters.update(
         d=U.fmt_date, num=U.fmt_num, eur=U.fmt_eur, label=lambda k, opts: C.label(opts, k),
-        age=U.age_from,
+        age=U.age_from, todate=U.parse_date,
         stage_short=lambda k: next((s[2] for s in C.STAGES if s[0] == k), k))
     app.jinja_env.trim_blocks = True
     app.jinja_env.lstrip_blocks = True

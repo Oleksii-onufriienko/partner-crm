@@ -3,12 +3,15 @@
     python seed_test_structure.py add    ПУТЬ/К/crm.sqlite3
     python seed_test_structure.py remove ПУТЬ/К/crm.sqlite3
     python seed_test_structure.py plan   ПУТЬ/К/crm.sqlite3
+    python seed_test_structure.py growth ПУТЬ/К/crm.sqlite3
 
-add    — добавляет под первого администратора: 3 VBA, 1 AL (у него ещё 1 VBA) и 10 VM,
+add    — добавляет под первого администратора: 3 VBAK, 1 AL (у него ещё 1 VBAK) и 10 VM,
          у каждого — до 10 контактов, потенциальные сделки, встречи и немного сделок.
          и план/факт по неделям на прошлый, текущий и следующий месяц.
 remove — удаляет всех тестовых людей (помечены «[ТЕСТ]» в заметке) со всеми их данными.
 plan   — заново заполняет план/факт по неделям у уже добавленных тестовых людей.
+growth — заново заполняет рост структуры у тестовых людей: история ступеней, сделки за год,
+         кандидаты в партнёры по этапам и годовой план (Jahresplanung) на текущий год.
 Телефоны вымышленные (+49 000 …). Кабинетов (паролей) у тестовых людей нет.
 """
 import datetime as dt
@@ -19,7 +22,7 @@ import sys
 
 MARK = "[ТЕСТ]"
 
-if len(sys.argv) != 3 or sys.argv[1] not in ("add", "remove", "plan"):
+if len(sys.argv) != 3 or sys.argv[1] not in ("add", "remove", "plan", "growth"):
     sys.exit(__doc__)
 cmd, path = sys.argv[1], os.path.abspath(os.path.expanduser(sys.argv[2]))
 if not os.path.exists(path):
@@ -29,7 +32,7 @@ if not os.path.exists(path):
 os.environ["CRM_DB"] = path
 os.environ.setdefault("CRM_INSTANCE", os.path.dirname(path))
 from crm import create_app  # noqa: E402
-from crm.demo import add_week_plans  # noqa: E402
+from crm.demo import add_growth, add_week_plans  # noqa: E402
 
 create_app()
 db = sqlite3.connect(path)
@@ -77,6 +80,17 @@ if cmd == "plan":
     print(f"План/факт по неделям заполнен у {n} тестовых людей.")
     sys.exit()
 
+if cmd == "growth":
+    ids = test_ids()
+    if not ids:
+        sys.exit("Тестовых людей нет. Сначала: python seed_test_structure.py add " + path)
+    admin_id = db.execute("SELECT id FROM persons WHERE is_admin = 1 ORDER BY id LIMIT 1").fetchone()[0]
+    c = add_growth(db, ids, random.Random(11), created_by=admin_id)
+    db.commit()
+    print(f"Рост структуры у {len(ids)} тестовых людей: {c['promotions']} повышений, {c['deals']} сделок за год, "
+          f"{c['candidates']} кандидатов, {c['goals']} целей годового плана.")
+    sys.exit()
+
 if test_ids():
     sys.exit("Тестовая структура уже есть. Сначала: python seed_test_structure.py remove " + path)
 admin = db.execute("SELECT id, first_name, last_name FROM persons WHERE is_admin = 1 ORDER BY id LIMIT 1").fetchone()
@@ -104,11 +118,11 @@ def person(first, last, stufe, coef, parent, goal=None):
 
 
 # ---- структура
-vba1 = person("Марина", "Кляйн", "VBA", 6, admin[0], 120)
-vba2 = person("Андрей", "Шульц", "VBA", 6, admin[0], 100)
-vba3 = person("Наталья", "Вагнер", "VBA", 6, admin[0], 100)
+vba1 = person("Марина", "Кляйн", "VBAK", 6, admin[0], 120)
+vba2 = person("Андрей", "Шульц", "VBAK", 6, admin[0], 100)
+vba3 = person("Наталья", "Вагнер", "VBAK", 6, admin[0], 100)
 al = person("Сергей", "Хартманн", "AL", 9, admin[0], 180)
-vba4 = person("Ольга", "Беккер", "VBA", 6, al, 100)
+vba4 = person("Ольга", "Беккер", "VBAK", 6, al, 100)
 
 vm_plan = [
     (vba1, "Денис", "Фогель"), (vba1, "Ирина", "Шнайдер"), (vba1, "Максим", "Лоренц"),
@@ -193,6 +207,8 @@ for pid in [vba1, vba2, vba3, al, vba4] + vms:
         continue
     add_week_plans(db, pid, rnd, scale=0.5 if pid in vms else 1.0, today=today)
 
+add_growth(db, [vba1, vba2, vba3, al, vba4] + vms, rnd, today=today, created_by=admin[0])
+
 db.commit()
-print(f"Добавлено под «{admin[1]} {admin[2]}»: 15 человек (3 VBA, 1 AL с 1 VBA, 10 VM), "
+print(f"Добавлено под «{admin[1]} {admin[2]}»: 15 человек (3 VBAK, 1 AL с 1 VBAK, 10 VM), "
       f"{counts['contacts']} контактов, {counts['meetings']} встреч, {counts['deals']} сделок.")

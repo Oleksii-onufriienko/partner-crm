@@ -102,6 +102,32 @@
       </form>
     </section>
 
+    <section class="panel" id="recruit">
+      <div class="panel-head"><h2>Кандидат в партнёры</h2>{% if c['recruit_stage'] %}<a href="{{ url_for('main.candidates', person=c['owner_id']) }}">Воронка</a>{% endif %}</div>
+      {% if c['recruit_stage'] == 'joined' %}
+        <p>Стал(а) партнёром{% if recruit_log %} {{ recruit_log[0]['date']|d('dmy') }}{% endif %}.{% if c['joined_person_id'] %} <a href="{{ url_for('main.person', pid=c['joined_person_id']) }}">Карточка в структуре</a>{% endif %}</p>
+      {% else %}
+      <form method="post" action="{{ url_for('main.contact_recruit', cid=c['id']) }}" class="recruit-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <label class="field"><span class="field-label">Этап</span>
+          <select name="stage">
+            <option value=""{% if not c['recruit_stage'] %} selected{% endif %}>не кандидат</option>
+            {% for k, n, d in C.RECRUIT_STAGES %}<option value="{{ k }}"{% if k == c['recruit_stage'] %} selected{% endif %}>{{ n }}</option>{% endfor %}
+          </select></label>
+        <label class="field"><span class="field-label">Дата Karriere-Info</span>
+          <input type="date" name="info_date" value="{{ c['recruit_info_date'] or '' }}"></label>
+        <button class="btn">Сохранить</button>
+      </form>
+      {% endif %}
+      {% if recruit_log %}
+      <ol class="stufe-hist recruit-hist">
+        {% for l in recruit_log %}<li><b>{{ l['stage']|label(C.RECRUIT_STAGES) }}</b><span></span><time datetime="{{ l['date'] }}">{{ l['date']|d('dmy') }}</time></li>{% endfor %}
+      </ol>
+      {% elif not c['recruit_stage'] %}
+      <p class="muted small" style="margin: 10px 0 0">Если человеку интересна работа, выберите этап — он появится в воронке партнёров.</p>
+      {% endif %}
+    </section>
+
     <section class="panel">
       <div class="panel-head"><h2>Встречи</h2><a href="{{ url_for('main.meeting_new', person=c['owner_id'], contact_id=c['id']) }}">Назначить</a></div>
       {% if meetings %}

@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_ui.html' import icon with context %}
+{% from '_ui.html' import icon, career_steps with context %}
 {% block title %}{{ p|fullname }}{% endblock %}
 {% block content %}
 {% set is_me = p['id'] == g.user['id'] %}
@@ -42,6 +42,11 @@
       {% else %}<ul class="signals none"><li>Слабых мест не видно: есть встречи, план и Marktpotenzial.</li></ul>{% endif %}
     </section>
 
+    <section class="panel" id="career">
+      <div class="panel-head"><h2>До следующей ступени</h2><a href="{{ url_for('main.career', person=p['id']) }}">Вся команда</a></div>
+      {{ career_steps(steps) }}
+    </section>
+
     <section class="panel{{ ' flush' if kids }}">
       <div class="panel-head"><h2>Прямые партнёры</h2>
         <a href="{{ url_for('main.person_new', parent=p['id']) }}">Добавить партнёра</a></div>
@@ -71,6 +76,18 @@
         <dt>Наставник</dt><dd>{% if parent %}<a href="{{ url_for('main.person', pid=parent['id']) }}">{{ parent|fullname }}</a>{% else %}верхний уровень{% endif %}</dd>
         {% if p['note'] %}<dt>Заметка</dt><dd style="white-space: pre-line">{{ p['note'] }}</dd>{% endif %}
       </dl>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>История ступеней</h2></div>
+      {% if history %}
+      <ol class="stufe-hist">
+        {% for h in history %}
+        <li><b>{{ h['stufe'] }}</b><span>{{ {'start': 'вход в бизнес', 'promotion': 'повышение', 'change': 'смена ступени'}[h['kind']] }}</span><time datetime="{{ h['date'] }}">{{ h['date']|d('dmy') }}</time></li>
+        {% endfor %}
+      </ol>
+      {% else %}<p class="empty">Пусто.</p>{% endif %}
+      {% if manage %}<p class="foot-note" style="margin-top: 12px">Повышение записывается, когда в «Изменить» выбирают новую ступень и дату.</p>{% endif %}
     </section>
 
     <section class="panel">

@@ -80,6 +80,17 @@
     });
   });
 
+  // Годовой план: «На год» → делим на 12 месяцев
+  document.querySelectorAll("[data-fill-year]").forEach(function (inp) {
+    inp.addEventListener("input", function () {
+      var v = parseFloat(inp.value.replace(",", "."));
+      var row = inp.closest("tr");
+      row.querySelectorAll("input.s-in").forEach(function (cell) {
+        cell.value = isNaN(v) ? "" : String(Math.round(v / 12 * 10) / 10);
+      });
+    });
+  });
+
   // Потенциальная сделка → «оформить»: переносим данные в форму сделки
   document.querySelectorAll("[data-to-deal]").forEach(function (btn) {
     btn.addEventListener("click", function () {

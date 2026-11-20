@@ -44,7 +44,7 @@ def person(first, last, stufe, coef, parent, email=None, admin=0, cabinet=True, 
 soon = (today + dt.timedelta(days=4)).replace(year=1988).isoformat()
 viktor = person("Виктор", "Берг", "RGS", 10, None, "admin@demo.local", admin=1, birth="1982-03-14", goal=250)
 irina = person("Ирина", "Ланге", "AL", 9, viktor, "irina@demo.local", birth=soon, goal=180)
-dmitri = person("Дмитрий", "Шмидт", "VBA", 6, viktor, "dmitri@demo.local", birth="1991-07-02", goal=120)
+dmitri = person("Дмитрий", "Шмидт", "VBAK", 6, viktor, "dmitri@demo.local", birth="1991-07-02", goal=120)
 oleg = person("Олег", "Майер", "VM", 2, viktor, "oleg@demo.local", birth="1996-11-30")
 svetlana = person("Светлана", "Кох", "VM", 1.5, irina, "svetlana@demo.local", birth="1993-05-21")
 pavel = person("Павел", "Вебер", "VM", 1, irina, "pavel@demo.local")
@@ -143,12 +143,13 @@ for pid, (_, per_week) in profiles.items():
                        (pid, day.isoformat(), pid))
         day += dt.timedelta(days=1)
 
-from crm.demo import add_week_plans  # noqa: E402
+from crm.demo import add_growth, add_week_plans  # noqa: E402
 
 for pid, (_, per_week) in profiles.items():
     if per_week:
         add_week_plans(db, pid, rnd, scale=1.0 if pid in (viktor, irina, dmitri) else 0.5, today=today)
 
+add_growth(db, list(profiles), rnd, today=today, created_by=viktor)
 db.commit()
 print(f"Демо-база создана: {path}")
 print("Вход: admin@demo.local / demo12345")

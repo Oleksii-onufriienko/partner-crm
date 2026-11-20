@@ -97,6 +97,41 @@ CREATE TABLE IF NOT EXISTS meetings (
 CREATE INDEX IF NOT EXISTS ix_meetings_owner_date ON meetings(owner_id, date);
 CREATE INDEX IF NOT EXISTS ix_meetings_contact ON meetings(contact_id);
 
+-- История ступеней: старт и каждое повышение/перевод с датой
+CREATE TABLE IF NOT EXISTS stufe_history (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    stufe       TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    kind        TEXT NOT NULL DEFAULT 'promotion',     -- start | promotion | change
+    created_by  INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_stufe_history_person ON stufe_history(person_id, date);
+
+-- Журнал этапов воронки партнёров (когда кандидат перешёл на этап)
+CREATE TABLE IF NOT EXISTS recruit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    contact_id  INTEGER NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
+    stage       TEXT NOT NULL,
+    date        TEXT NOT NULL,
+    created_by  INTEGER,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_recruit_log_contact ON recruit_log(contact_id);
+
+-- Годовой план (Jahresplanung): цели по месяцам
+CREATE TABLE IF NOT EXISTS year_goals (
+    person_id   INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    year        INTEGER NOT NULL,
+    month       INTEGER NOT NULL,
+    metric      TEXT NOT NULL,
+    ziel        REAL,
+    updated_by  INTEGER,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (person_id, year, month, metric)
+);
+
 -- План (Soll) и ручной факт (Ist) по неделям. week = понедельник недели.
 -- ist = NULL: для автоматических показателей факт считается из встреч и сделок.
 CREATE TABLE IF NOT EXISTS week_plan (
@@ -115,6 +150,25 @@ CREATE TABLE IF NOT EXISTS week_plan (
 MIGRATIONS = [
     ("deals", "source", "TEXT NOT NULL DEFAULT 'consult'"),
     ("persons", "prefs", "TEXT"),          # личные настройки пользователя (JSON)
+    ("contacts", "recruit_stage", "TEXT"),        # этап воронки партнёров
+    ("contacts", "recruit_info_date", "TEXT"),    # дата Karriere-Info
+    ("contacts", "joined_person_id", "INTEGER"),  # кем стал в структуре
+]
+
+# Перенос данных (каждый раз безопасно): старые коды ступеней, стартовая история ступеней,
+# кандидаты из старой галочки «интерес к партнёрству».
+DATA_MIGRATIONS = [
+    "UPDATE persons SET stufe = 'VBAK' WHERE stufe = 'VBA'",
+    "UPDATE persons SET stufe = 'RD1' WHERE stufe = 'RD'",
+    "UPDATE stufe_history SET stufe = 'VBAK' WHERE stufe = 'VBA'",
+    "UPDATE stufe_history SET stufe = 'RD1' WHERE stufe = 'RD'",
+    """INSERT INTO stufe_history (person_id, stufe, date, kind)
+       SELECT id, stufe, COALESCE(start_date, date(created_at)), 'start' FROM persons p
+       WHERE NOT EXISTS (SELECT 1 FROM stufe_history h WHERE h.person_id = p.id)""",
+    "UPDATE contacts SET recruit_stage = 'interest' WHERE partner_interest = 1 AND recruit_stage IS NULL",
+    """INSERT INTO recruit_log (contact_id, stage, date)
+       SELECT id, recruit_stage, date(updated_at) FROM contacts c
+       WHERE recruit_stage IS NOT NULL AND NOT EXISTS (SELECT 1 FROM recruit_log l WHERE l.contact_id = c.id)""",
 ]
 
 
@@ -154,6 +208,8 @@ def init_db():
         cols = [r[1] for r in db.execute(f"PRAGMA table_info({table})")]
         if column not in cols:
             db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+    for sql in DATA_MIGRATIONS:
+        db.execute(sql)
     db.commit()
 
 

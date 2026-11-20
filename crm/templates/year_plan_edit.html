@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon with context %}
+{% block title %}Цели на {{ year }}{% endblock %}
+{% block content %}
+{% set months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'] %}
+<header class="page-head">
+  <div>
+    <p class="crumbs"><a href="{{ url_for('main.year_plan', person=p['id'], year=year) }}">Годовой план {{ year }}</a></p>
+    <h1>Цели на {{ year }}{% if p['id'] != g.user['id'] %}: {{ p|fullname }}{% endif %}</h1>
+    <p class="sub">Цель на месяц. «Каждый месяц» ставит одно число во все месяцы, «На год» делит годовую цель на 12. Пустая клетка — цели нет.</p>
+  </div>
+</header>
+
+<form method="post" class="panel flush">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="person" value="{{ p['id'] }}">
+  <input type="hidden" name="year" value="{{ year }}">
+  <div class="table-wrap">
+  <table class="table pf pf-edit">
+    <thead><tr>
+      <th class="pf-label">Показатель</th>
+      <th class="num pf-all">Каждый<br>месяц</th>
+      <th class="num pf-all">На год<br><span class="sub">÷ 12</span></th>
+      {% for m in months %}<th class="num">{{ m }}</th>{% endfor %}
+    </tr></thead>
+    <tbody>
+    {% set ns = namespace(block=none) %}
+    {% for key, block, label, de, editable in metrics %}
+      {% if editable %}
+      {% if block != ns.block %}{% set ns.block = block %}<tr class="pf-block"><td colspan="15">{{ blocks[block] }}</td></tr>{% endif %}
+      <tr>
+        <td class="pf-label">{{ label }}<span class="sub">{{ de }}</span></td>
+        <td class="num pf-all"><input type="text" inputmode="decimal" data-fill-row="{{ key }}" aria-label="{{ label }}: цель на каждый месяц"></td>
+        <td class="num pf-all"><input type="text" inputmode="decimal" data-fill-year="{{ key }}" aria-label="{{ label }}: цель на год, разделить на 12"></td>
+        {% for m in range(12) %}
+        {% set v = ziel[key][m] %}
+        <td class="num"><input class="s-in" type="text" inputmode="decimal" name="g_{{ key }}_{{ m + 1 }}" value="{{ '%g'|format(v) if v is not none else '' }}" aria-label="{{ label }}, {{ months[m] }}"></td>
+        {% endfor %}
+      </tr>
+      {% endif %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <div class="form-actions" style="padding: 0 22px 18px">
+    <button class="btn primary">Сохранить цели</button>
+    <a class="btn ghost" href="{{ url_for('main.year_plan', person=p['id'], year=year) }}">Отмена</a>
+  </div>
+</form>
+<p class="foot-note">Единицы всего считаются сами: лично + группа. Подсказка по Leistung 2026: для RGS нужно 4 000 единиц Netto Gesamt за 12 месяцев, для GS — 8 000, для HGS — 16 000.</p>
+{% endblock %}

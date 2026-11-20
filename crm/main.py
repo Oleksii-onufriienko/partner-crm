@@ -42,10 +42,11 @@ def _set_view(pid):
 VIEW_LANDING = {
     "main.contact": "main.contacts", "main.contact_new": "main.contacts",
     "main.meeting_new": "main.planner", "main.meeting_edit": "main.planner",
-    "main.plan_edit": "main.plan", "main.person_new": "main.team",
+    "main.plan_edit": "main.plan", "main.person_new": "main.team", "main.year_plan_edit": "main.year_plan",
     "auth.account": "main.dashboard",
 }
-VIEW_KEEP = {"main.dashboard", "main.contacts", "main.planner", "main.plan", "main.stats", "main.team"}
+VIEW_KEEP = {"main.dashboard", "main.contacts", "main.planner", "main.plan", "main.stats", "main.team",
+             "main.candidates", "main.year_plan", "main.career"}
 
 
 @bp.app_context_processor
@@ -166,10 +167,20 @@ def dashboard():
     week_view = P.view(week_grid, wk)
     has_week_plan = any(c["soll"] is not None for c in week_grid[wk[0].isoformat()].values())
 
+    from . import career as K
+    from . import recruit as R
+    steps = K.plan_for(me, K.facts([me["id"]], vp_all, children_map())[me["id"]])
+    cand = R.reached_counts([me["id"]])
+    cand_active = query("""SELECT recruit_stage, COUNT(*) n FROM contacts WHERE owner_id = ?
+                           AND recruit_stage IN ('interest', 'invited', 'attended', 'talk')
+                           GROUP BY recruit_stage""", (me["id"],))
+
     return render_template("dashboard.html", p=me, m=metrics, today_meetings=today_meetings,
                            week_summary=week_view["summary"], has_week_plan=has_week_plan,
                            upcoming=upcoming, stale=stale, followups=followups, team=team,
-                           birthdays=birthdays, month_label=S.period_from_args({})[3])
+                           birthdays=birthdays, month_label=S.period_from_args({})[3],
+                           steps=steps, cand_active={r["recruit_stage"]: r["n"] for r in cand_active},
+                           cand_joined=cand["joined"])
 
 
 # ---------------------------------------------------------------- структура
@@ -187,8 +198,10 @@ def team():
     per = S.compute([p for p, _ in rows], ms, me_)
     sig = S.signals([p for p, _ in rows])
     cmap = children_map()
+    from .growth import career_rows
+    career = {r["p"]["id"]: r for r in career_rows(root["id"])}
     return render_template("team.html", rows=rows, per=per, sig=sig, cmap=cmap, root=root,
-                           show_inactive=show_inactive)
+                           show_inactive=show_inactive, career=career)
 
 
 def _person_form_data(form, person=None):
@@ -242,16 +255,39 @@ def person_new():
             flash(err, "error")
         else:
             data["created_by"] = g.user["id"]
+            if not data.get("start_date"):
+                data["start_date"] = today().isoformat()
             cols = ", ".join(data)
             pid = execute(f"INSERT INTO persons ({cols}) VALUES ({', '.join('?' * len(data))})",
                           list(data.values()))
+            execute("INSERT INTO stufe_history (person_id, stufe, date, kind, created_by) VALUES (?, ?, ?, 'start', ?)",
+                    (pid, data["stufe"], data["start_date"], g.user["id"]))
+            # Человек пришёл из воронки партнёров — отмечаем кандидата как «стал партнёром»
+            from_contact = parse_int(form.get("from_contact"))
+            if from_contact:
+                cand = query("SELECT * FROM contacts WHERE id = ?", (from_contact,), one=True)
+                if cand and cand["owner_id"] in visible_ids():
+                    from .recruit import set_stage
+                    set_stage(cand, "joined", g.user["id"], joined_person_id=pid)
             flash(f"{data['first_name']} {data['last_name']} добавлен(а) в структуру.", "ok")
             if form.get("invite"):
                 link, exp = create_invite(pid)
                 session["invite_link"] = {"pid": pid, "link": link, "expires": exp}
             return redirect(url_for("main.person", pid=pid))
     parent = parse_int(request.args.get("parent")) or g.user["id"]
-    return render_template("person_form.html", person=None, form=form,
+    prefill = {}
+    cand = None
+    from_contact = parse_int(request.args.get("from_contact"))
+    if from_contact:
+        cand = query("SELECT * FROM contacts WHERE id = ?", (from_contact,), one=True)
+        if cand and cand["owner_id"] in visible_ids():
+            prefill = {"first_name": cand["first_name"], "last_name": cand["last_name"] or "",
+                       "phone": cand["phone"] or "", "email": cand["email"] or "",
+                       "from_contact": str(cand["id"])}
+            parent = cand["owner_id"]
+        else:
+            cand = None
+    return render_template("person_form.html", person=None, form=form or prefill, candidate=cand,
                            parent_id=parent if parent in visible_ids() else g.user["id"],
                            options=person_options())
 
@@ -271,9 +307,12 @@ def person(pid):
     if invite and invite.get("pid") != pid:
         invite = None
     parent = vp.get(p["parent_id"]) if p["parent_id"] else None
+    from . import career as K
+    facts = K.facts([pid], vp, children_map())[pid]
     return render_template("person.html", p=p, own=own, total=total, sig=sig,
                            kids=direct_children(pid), branch_size=len(b), parent=parent,
-                           invite=invite, manage=can_manage(p), period_label=label)
+                           invite=invite, manage=can_manage(p), period_label=label,
+                           steps=K.plan_for(p, facts), history=K.history(pid), facts=facts)
 
 
 @bp.route("/people/<int:pid>/edit", methods=["GET", "POST"])
@@ -292,6 +331,13 @@ def person_edit(pid):
                 data.pop("is_admin", None)      # не снимаем права сами с себя
             sets = ", ".join(f"{k} = ?" for k in data)
             execute(f"UPDATE persons SET {sets} WHERE id = ?", [*data.values(), pid])
+            if data["stufe"] != p["stufe"]:
+                when = parse_date(form.get("stufe_date")) or today()
+                up = C.STUFE_RANK.get(data["stufe"], 0) > C.STUFE_RANK.get(p["stufe"], 0)
+                execute("""INSERT INTO stufe_history (person_id, stufe, date, kind, created_by)
+                           VALUES (?, ?, ?, ?, ?)""",
+                        (pid, data["stufe"], when.isoformat(), "promotion" if up else "change", g.user["id"]))
+                flash(f"Ступень изменена: {p['stufe']} → {data['stufe']} с {when.strftime('%d.%m.%Y')}.", "ok")
             flash("Изменения сохранены.", "ok")
             return redirect(url_for("main.person", pid=pid))
     exclude = set(branch_ids(pid))
@@ -491,6 +537,16 @@ def _contact_form_data(form):
     return data, None
 
 
+def _sync_recruit(cid, interest):
+    """Галочка «интерес к сотрудничеству» = кандидат в воронке партнёров."""
+    from .recruit import set_stage
+    c = query("SELECT * FROM contacts WHERE id = ?", (cid,), one=True)
+    if interest and not c["recruit_stage"]:
+        set_stage(c, "interest", g.user["id"])
+    elif not interest and c["recruit_stage"] and c["recruit_stage"] != "joined":
+        execute("UPDATE contacts SET recruit_stage = NULL WHERE id = ?", (cid,))
+
+
 @bp.route("/contacts/new", methods=["GET", "POST"])
 @login_required
 def contact_new():
@@ -502,6 +558,7 @@ def contact_new():
         else:
             cid = execute(f"INSERT INTO contacts ({', '.join(data)}) VALUES ({', '.join('?' * len(data))})",
                           list(data.values()))
+            _sync_recruit(cid, data["partner_interest"])
             flash("Контакт сохранён. Теперь можно добавить потенциальные сделки.", "ok")
             return redirect(url_for("main.contact", cid=cid))
     pid = _pid_arg()
@@ -524,15 +581,17 @@ def contact(cid):
             sets = ", ".join(f"{k} = ?" for k in data)
             execute(f"UPDATE contacts SET {sets}, updated_at = datetime('now') WHERE id = ?",
                     [*data.values(), cid])
+            _sync_recruit(cid, data["partner_interest"])
             flash("Контакт сохранён.", "ok")
             return redirect(url_for("main.contact", cid=cid))
     potentials = query("SELECT * FROM potentials WHERE contact_id = ? ORDER BY id", (cid,))
     deals = query("SELECT * FROM deals WHERE contact_id = ? ORDER BY date DESC, id DESC", (cid,))
     meetings = query("SELECT * FROM meetings WHERE contact_id = ? ORDER BY date DESC, time DESC", (cid,))
     owner = visible_persons()[c["owner_id"]]
+    recruit_log = query("SELECT * FROM recruit_log WHERE contact_id = ? ORDER BY date DESC, id DESC", (cid,))
     return render_template("contact.html", c=c, form=form, owner_id=c["owner_id"], owner=owner,
                            options=person_options(active_only=False), potentials=potentials,
-                           deals=deals, meetings=meetings, today=today())
+                           deals=deals, meetings=meetings, today=today(), recruit_log=recruit_log)
 
 
 @bp.route("/contacts/<int:cid>/delete", methods=["POST"])

@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, team_tabs, progress, career_steps with context %}
+{% block title %}Карьера{% endblock %}
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Карьера</h1>
+    <p class="sub">Кто сколько прошёл до следующей ступени по условиям «Leistung lohnt sich 2026». Сверху — ближе всего к повышению.</p>
+  </div>
+</header>
+{{ team_tabs('main.career', p['id']) }}
+
+<section class="panel flush">
+  <div class="table-wrap">
+  <table class="table career-table">
+    <thead><tr>
+      <th>Партнёр</th><th>Сейчас</th><th>Следующая</th><th class="cr-prog">Пройдено</th><th>Чего не хватает больше всего</th>
+    </tr></thead>
+    <tbody>
+    {% for r in rows %}
+      {% set st = r.main %}
+      <tr>
+        <td><a class="row-link" href="{{ url_for('main.person', pid=r.p['id']) }}#career">{{ r.p|fullname }}</a>{% if r.p['id'] == g.user['id'] %} <span class="muted">(я)</span>{% endif %}
+          <span class="sub">{{ r.f.eigen_12|num(0) }} ед. лично{% if r.f.gruppe_12 %}, {{ r.f.gruppe_12|num(0) }} группа{% endif %} за 12 мес.</span></td>
+        <td>{{ r.p['stufe'] }}</td>
+        <td>{% if st %}{{ r.steps|map(attribute='target')|join(' или ') }}{% else %}<span class="muted">вершина</span>{% endif %}</td>
+        <td class="cr-prog">{% if st %}{{ progress(st.pct, st.done, 'До ' ~ st.target) }}<span class="cr-pct">{{ 'готово' if st.done else st.pct ~ '%' }}</span>{% endif %}</td>
+        <td>{% if r.gap %}{{ r.gap.label }}: <b>не хватает {{ (r.gap.target - r.gap.value)|num(0) }}</b> {{ r.gap.unit }}
+            {% elif st and st.done %}<span class="chip ok">Условия {{ st.target }} выполнены</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<div class="grid-2" style="margin-top: 20px">
+  <section class="panel">
+    <div class="panel-head"><h2>Условия повышения</h2><span class="muted small">Leistung lohnt sich 2026</span></div>
+    <div class="table-wrap"><table class="table rules-table">
+      <thead><tr><th>Ступень</th><th class="num">€ за ед.</th><th>Условие</th></tr></thead>
+      <tbody>
+        <tr><td>VBAK</td><td class="num">6,00</td><td>450 единиц подано или 300 единиц и 2 VM</td></tr>
+        <tr><td>AL</td><td class="num">9,00</td><td>600 единиц Netto Gesamt за 3 месяца подряд</td></tr>
+        <tr class="sub-row"><td colspan="3">Путь Team: единицы за 12 месяцев</td></tr>
+        <tr><td>RGS</td><td class="num">10,00</td><td>4 000 Gesamt (лично до 2 400), 1 600 от новых партнёров, лично от 1 800</td></tr>
+        <tr><td>GS</td><td class="num">11,00</td><td>8 000 Gesamt (лично до 4 000), 3 000 от новых партнёров, лично от 1 800</td></tr>
+        <tr><td>HGS</td><td class="num">12,00</td><td>16 000 Gesamt (лично до 4 000), 3 500 от новых партнёров, лично от 1 800</td></tr>
+        <tr><td>RD1</td><td class="num">12,60</td><td>32 000 Gesamt (лично до 5 000), 4 000 от новых партнёров</td></tr>
+        <tr><td>RD2</td><td class="num">13,20</td><td>48 000 Gesamt (лично до 6 000), 5 000 от новых партнёров</td></tr>
+        <tr><td>D</td><td class="num">14,00</td><td>68 000 Gesamt (лично до 8 000), 9 000 от новых партнёров</td></tr>
+        <tr class="sub-row"><td colspan="3">Путь Praxis: лично (Netto Neu Eigen), за 12 месяцев и с прошлого повышения</td></tr>
+        {% for st, rate, a, b in [('P2', '10,00', '2 400', '4 800'), ('P3', '11,00', '3 000', '6 000'), ('P4', '12,00', '3 600', '7 200'), ('P5', '12,60', '4 200', '8 400'), ('P6', '13,20', '4 800', '12 000'), ('P7', '13,60', '5 400', '15 000')] %}
+        <tr><td>{{ st }}</td><td class="num">{{ rate }}</td><td>{{ a }} за 12 месяцев и {{ b }} с прошлого повышения</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><h2>Последние повышения</h2></div>
+    {% if promotions %}
+    <ul class="item-list">
+      {% for h in promotions %}<li><span class="grow"><a href="{{ url_for('main.person', pid=h['person_id']) }}">{{ h['first_name'] }} {{ h['last_name'] }}</a> стал(а) {{ h['stufe'] }}</span><span class="muted">{{ h['date']|d('dmy') }}</span></li>{% endfor %}
+    </ul>
+    {% else %}<p class="empty">Пока нет. Повышение записывается, когда в карточке партнёра меняют ступень.</p>{% endif %}
+  </section>
+</div>
+<p class="foot-note">Как считается: единицы — KE оформленных сделок; сторно в CRM пока нет, поэтому Netto = сумма сделок. Gesamt = лично (но не больше лимита ступени) + все ниже по структуре.
+«Новые партнёры (36/12)» — единицы за 12 месяцев от людей, которые вошли в бизнес не раньше 36 месяцев назад. Для AL берутся лучшие 3 месяца подряд за последний год.</p>
+{% endblock %}

@@ -564,3 +564,127 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .hide-m { display: none; }
   .toolbar input[type=search], .toolbar select { max-width: none; flex: 1 1 140px; }
 }
+
+/* ---------- Рост структуры: вкладки команды, воронка, годовой план, карьера ---------- */
+.team-tabs { margin: -6px 0 20px; flex-wrap: wrap; }
+
+.progress { display: block; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; min-width: 60px; }
+.progress i { display: block; height: 100%; width: var(--w); background: var(--warn); border-radius: 3px; }
+.progress.ok i { background: var(--primary); }
+
+/* Воронка */
+.funnel { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.funnel li { display: grid; grid-template-columns: 210px minmax(0, 1fr) 44px 170px; gap: 14px; align-items: center; font-size: 14px; }
+.fn-label { color: var(--ink-2); }
+.fn-bar { height: 22px; background: var(--surface-2); border-radius: 4px; overflow: hidden; }
+.fn-bar i { display: block; height: 100%; width: var(--w); min-width: 2px; background: var(--primary); border-radius: 0 4px 4px 0; opacity: .85; }
+.fn-n { font-weight: 650; text-align: right; font-variant-numeric: tabular-nums; }
+.fn-conv { font-size: 13px; color: var(--muted); }
+.funnel-period { display: flex; flex-wrap: wrap; margin: 20px 0 0; padding: 16px 0 0; border-top: 1px solid var(--line); gap: 12px 0; }
+.funnel-period > div { flex: 1 1 160px; padding-right: 20px; }
+.funnel-period dt { font-size: 13px; color: var(--muted); }
+.funnel-period dd { margin: 2px 0 0; font-size: 22px; font-weight: 600; }
+.funnel-period dd small { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.funnel-period .sub { display: block; font-size: 13px; color: var(--muted); }
+
+.quick-row { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; }
+.quick-row .field { flex: 1 1 140px; }
+.quick-row .qc-title { flex-basis: 100%; font-size: 15px; }
+.quick-cand .foot-note { margin-top: 12px; }
+
+/* Доска кандидатов */
+.board { display: grid; grid-template-columns: repeat(5, minmax(190px, 1fr)); gap: 14px; margin-top: 20px; overflow-x: auto; padding-bottom: 4px; }
+.board-col { background: var(--surface-2); border-radius: var(--radius); padding: 12px; min-width: 0; }
+.board-col header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-bottom: 10px; }
+.board-col h2 { font-size: 14px; font-weight: 650; }
+.board-col .de { flex-basis: 100%; font-size: 12px; color: var(--muted); }
+.cand { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 10px 11px; }
+.cand + .cand { margin-top: 8px; }
+.cand.stale { border-color: var(--warn); box-shadow: inset 3px 0 0 var(--warn); }
+.cand-name { display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--ink); text-decoration: none; font-size: 14px; }
+.cand-name:hover { text-decoration: underline; }
+.cand-meta { margin: 4px 0 8px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.cand-move select { height: 30px; font-size: 13px; padding: 0 8px; width: 100%; }
+.board-empty { font-size: 13px; color: var(--muted); margin: 4px 2px; }
+.declined { margin-top: 20px; }
+.declined summary { cursor: pointer; font-weight: 600; }
+.declined .item-list { margin-top: 10px; }
+
+/* Годовой план */
+.yp { font-size: 13px; }
+.yp th, .yp td { padding: 7px 6px; }
+.yp .pf-label { min-width: 190px; max-width: 220px; padding-left: 16px; }
+.yp td.yp-cell { line-height: 1.2; white-space: nowrap; }
+.yp td.yp-cell b { display: block; font-weight: 600; }
+.yp .yp-z { display: block; font-size: 11.5px; color: var(--muted); }
+.yp .yp-q { background: color-mix(in srgb, var(--surface-2) 60%, transparent); border-left: 1px solid var(--line); }
+.yp .yp-y { background: color-mix(in srgb, var(--surface-2) 90%, transparent); border-left: 1px solid var(--line-strong); }
+.yp td.hit b { color: var(--primary); }
+.yp td.miss b { color: var(--danger); }
+
+/* Путь до ступени */
+.career { display: grid; gap: 18px; }
+.career-step + .career-step { padding-top: 16px; border-top: 1px solid var(--line); }
+.cs-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cs-head b { font-size: 18px; letter-spacing: -.01em; }
+.cs-title { color: var(--ink-2); font-size: 14px; flex: 1; min-width: 0; }
+.cs-pct { font-weight: 650; font-variant-numeric: tabular-nums; }
+.career-step.done .cs-pct { color: var(--primary); }
+.cs-note { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.cs-or { margin: 12px 0 0; font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.cs-crit { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 12px; }
+.cs-crit li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; font-size: 13.5px; }
+.cs-label .sub { display: block; font-size: 12px; color: var(--muted); }
+.cs-val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cs-val small { font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.cs-crit .progress { grid-column: 1 / -1; }
+.cs-gap { grid-column: 1 / -1; font-size: 12px; color: var(--muted); margin-top: -2px; }
+.cs-crit li.ok .cs-gap { color: var(--primary); }
+.career-step.brief .cs-head { font-size: 13px; }
+.career-step.brief .cs-head b { font-size: 15px; }
+.career.compact .cs-crit { gap: 9px; }
+
+.career-table td { vertical-align: middle; }
+.career-table .cr-prog { width: 200px; }
+.career-table .cr-prog .progress { display: inline-block; width: 120px; vertical-align: middle; }
+.career-table .cr-pct { margin-left: 10px; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 13px; }
+.rules-table { font-size: 13px; }
+.rules-table td { padding-top: 7px; padding-bottom: 7px; }
+.rules-table tr.sub-row td { background: var(--surface-2); font-weight: 600; color: var(--ink-2); }
+
+.stufe-hist { list-style: none; margin: 0; padding: 0; }
+.stufe-hist li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.stufe-hist li:first-child { border-top: 0; }
+.stufe-hist span { color: var(--ink-2); font-size: 13px; }
+.stufe-hist time { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.recruit-hist { margin-top: 12px; }
+.recruit-hist li { grid-template-columns: minmax(0, 1fr) 0 auto; }
+.recruit-form { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: end; }
+.recruit-form .field { flex: 1 1 160px; }
+
+.cand-mini { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.cand-mini li { display: grid; gap: 2px; }
+.cand-mini b { font-size: 22px; font-weight: 600; }
+.cand-mini span { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+
+@media (max-width: 860px) {
+  .funnel li { grid-template-columns: 1fr 40px; }
+  .funnel .fn-bar { grid-column: 1 / -1; grid-row: 2; }
+  .funnel .fn-conv { grid-column: 1 / -1; }
+  .board { grid-template-columns: repeat(5, 230px); }
+  .cand-mini { grid-template-columns: repeat(2, 1fr); }
+  .funnel .fn-bar { height: 10px; }
+  .funnel-period > div { flex-basis: 130px; }
+  /* Карьера на телефоне: каждая строка — карточка */
+  .career-table thead { display: none; }
+  .career-table tr { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px 10px; padding: 12px 14px;
+                     border-top: 1px solid var(--line); align-items: baseline; }
+  .career-table tbody tr:first-child { border-top: 0; }
+  .career-table td { display: block; padding: 0 !important; border: 0 !important; }
+  .career-table td:nth-child(3)::before { content: "→ "; color: var(--muted); }
+  .career-table td:nth-child(4), .career-table td:nth-child(5) { grid-column: 1 / -1; }
+  .career-table .cr-prog { width: auto; display: flex; align-items: center; }
+  .career-table .cr-prog .progress { flex: 1; width: auto; }
+  .career-table td:nth-child(5) { font-size: 13px; color: var(--ink-2); }
+}
+.yp thead th.num { text-align: right; }

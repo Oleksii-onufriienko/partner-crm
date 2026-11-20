@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import icon, team_tabs with context %}
+{% block title %}Годовой план {{ year }}{% endblock %}
+{% macro n(x) -%}{% if x is none %}<span class="muted">—</span>{% else %}{{ x|num(0) }}{% endif %}{%- endmacro %}
+{% block content %}
+{% set months = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'] %}
+<header class="page-head">
+  <div>
+    <h1>Годовой план {{ year }}</h1>
+    <p class="sub">{{ 'Мой план' if p['id'] == g.user['id'] else 'План ' ~ (p|fullname) }}: единицы и рост структуры по месяцам, как Jahresplanung в Erfolgsjournal. Факт считается сам.</p>
+  </div>
+  <div class="actions">
+    <a class="btn ghost" href="{{ url_for('main.year_plan', person=p['id'], year=year - 1) }}" aria-label="{{ year - 1 }} год">{{ icon('chev-l') }}</a>
+    <a class="btn" href="{{ url_for('main.year_plan', person=p['id']) }}">Этот год</a>
+    <a class="btn ghost" href="{{ url_for('main.year_plan', person=p['id'], year=year + 1) }}" aria-label="{{ year + 1 }} год">{{ icon('chev-r') }}</a>
+    <a class="btn primary" href="{{ url_for('main.year_plan_edit', person=p['id'], year=year) }}">{{ icon('edit') }}Поставить цели</a>
+  </div>
+</header>
+{{ team_tabs('main.year_plan', p['id']) }}
+
+<dl class="kpis" aria-label="Итог года">
+  {% for key, title, sub in [('gesamt', 'Единицы всего', 'лично и группа'), ('vm_direct', 'Новые VM напрямую', 'вошли в структуру'), ('vm_indirect', 'Новые VM в глубине', 'у ваших партнёров'), ('al_direct', 'Новые AL', 'напрямую')] %}
+  {% set t = totals[key] %}
+  {% set pct = (100 * t.ist / t.ziel)|round|int if t.ziel else none %}
+  <div><dt>{{ title }}</dt>
+    <dd>{{ t.ist|num(0) }} <small>{% if t.ziel %}из {{ t.ziel|num(0) }}{% else %}цели нет{% endif %}</small></dd>
+    <span class="sub">{% if pct is not none %}{{ pct }}% годовой цели{% else %}{{ sub }}{% endif %}</span>
+    {% if pct is not none %}<span class="meter" role="presentation"><i style="--w: {{ [pct, 100]|min }}%"{% if pct >= 100 %} class="full"{% endif %}></i></span>{% endif %}
+  </div>
+  {% endfor %}
+</dl>
+
+<section class="panel flush">
+  <div class="table-wrap">
+  <table class="table pf yp">
+    <thead><tr>
+      <th class="pf-label">Показатель</th>
+      {% for c in cols %}
+        {% if c.kind == 'month' %}<th class="num{{ ' now' if year == today().year and c.m + 1 == today().month }}">{{ months[c.m] }}</th>
+        {% elif c.kind == 'quarter' %}<th class="num yp-q">Q{{ c.q + 1 }}</th>
+        {% else %}<th class="num yp-y">Год</th>{% endif %}
+      {% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for b in blocks %}
+      <tr class="pf-block"><td colspan="{{ cols|length + 1 }}">{{ b.label }}</td></tr>
+      {% for r in b.rows %}
+      <tr>
+        <td class="pf-label">{{ r.label }}<span class="sub">{{ r.de }}</span></td>
+        {% for c in r.cells %}
+        <td class="num yp-cell{{ ' yp-q' if c.kind == 'quarter' }}{{ ' yp-y' if c.kind == 'year' }}{{ ' now' if c.now }} {{ c.state }}">
+          {% if c.ist is none %}<span class="muted">·</span>{% else %}<b>{{ c.ist|num(0) }}</b>{% endif %}
+          {% if c.ziel is not none %}<span class="yp-z">из {{ c.ziel|num(0) }}</span>{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+<p class="foot-note">В каждой клетке: крупно — факт, ниже — цель. Зелёным — цель выполнена, красным — месяц или квартал прошёл, а цель не выполнена.
+Новые VM — по дате входа в бизнес; повышения — по истории ступеней (её пишет форма партнёра при смене ступени); кандидаты — из воронки партнёров.
+«Напрямую» — люди первой линии под {{ 'вами' if p['id'] == g.user['id'] else p['first_name'] }}, «в глубине» — все ниже.</p>
+{% endblock %}

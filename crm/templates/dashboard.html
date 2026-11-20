@@ -1,5 +1,5 @@
 {% extends 'base.html' %}
-{% from '_ui.html' import icon, meeting_line, pyramid, temp, status_chip with context %}
+{% from '_ui.html' import icon, meeting_line, pyramid, temp, status_chip, career_steps with context %}
 {% block title %}Сегодня{% endblock %}
 {% block content %}
 {% set u = p %}
@@ -71,6 +71,24 @@
       </div>
       {% else %}
       <p class="empty">План на эту неделю не заполнен. <a href="{{ url_for('main.plan_edit', person=p['id']) }}">Заполнить план</a>: сколько первых терминов, бератунгов и KE вы хотите сделать.</p>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>До следующей ступени</h2><a href="{{ url_for('main.person', pid=p['id']) }}#career">Подробно</a></div>
+      {{ career_steps(steps, compact=true) }}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><h2>Кандидаты в партнёры</h2><a href="{{ url_for('main.candidates', person=p['id']) }}">Воронка</a></div>
+      {% set total_c = cand_active.values()|sum %}
+      {% if total_c %}
+      <ul class="cand-mini">
+        {% for key in C.RECRUIT_ACTIVE %}<li><b>{{ cand_active.get(key, 0) }}</b><span>{{ key|label(C.RECRUIT_STAGES) }}</span></li>{% endfor %}
+      </ul>
+      <p class="muted small" style="margin: 10px 0 0">Всего стали партнёрами: {{ cand_joined }}.</p>
+      {% else %}
+      <p class="empty">Кандидатов нет. Отметьте в Marktpotenzial тех, кому интересна работа, — строить структуру начинают с этого списка.</p>
       {% endif %}
     </section>
 
