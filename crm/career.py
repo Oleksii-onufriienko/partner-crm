@@ -6,6 +6,7 @@
   Gesamt  = Eigen (не больше лимита «Netto Eigen max») + Gruppe;
   neue Partner (36/12) = единицы за 12 месяцев людей ниже, которые вошли в бизнес не раньше 36 месяцев назад;
   «с последнего повышения» — по истории ступеней.
+Периоды всегда последние: 3 / 12 / 36 месяцев назад от сегодняшней даты.
 """
 import datetime as dt
 
@@ -27,7 +28,7 @@ TEAM_PATH = ["AL", "RGS", "GS", "HGS", "RD1", "RD2", "D"]
 PRAXIS_RULES = {"P2": (2400, 4800), "P3": (3000, 6000), "P4": (3600, 7200),
                 "P5": (4200, 8400), "P6": (4800, 12000), "P7": (5400, 15000)}
 PRAXIS_PATH = ["AL", "P2", "P3", "P4", "P5", "P6", "P7"]
-AL_UNITS = 600                          # Netto Gesamt за 3 месяца подряд
+AL_UNITS = 600                          # Netto Gesamt за последние 3 месяца
 VBAK_UNITS, VBAK_UNITS_VM, VBAK_VM = 450, 300, 2
 NEW_PARTNER_MONTHS = 36
 
@@ -46,24 +47,24 @@ def next_targets(stufe):
     return []
 
 
-def _months_back(t, n):
-    """Список (год, месяц) из n последних месяцев, включая текущий, по возрастанию."""
-    out, y, m = [], t.year, t.month
-    for _ in range(n):
-        out.append((y, m))
-        m -= 1
-        if m == 0:
-            y, m = y - 1, 12
-    return list(reversed(out))
+def months_ago(t, n):
+    """Та же дата n месяцев назад (31-е → последний день короткого месяца)."""
+    y, m = divmod(t.year * 12 + t.month - 1 - n, 12)
+    m += 1
+    for day in (t.day, 30, 29, 28):
+        try:
+            return dt.date(y, m, day)
+        except ValueError:
+            continue
 
 
 def facts(person_ids, persons, children):
     """Факты для расчёта по каждому человеку. persons: {id: row}, children: {id: [row, ...]}."""
     t = today()
-    y1 = t - dt.timedelta(days=365)
-    np_since = t - dt.timedelta(days=NEW_PARTNER_MONTHS * 30.44)
-    months = _months_back(t, 12)
-    midx = {ym: i for i, ym in enumerate(months)}
+    # Всегда последние месяцы, считая назад от сегодня: 12 месяцев, 3 месяца, 36 месяцев
+    y1 = months_ago(t, 12)
+    m3 = months_ago(t, 3)
+    np_since = months_ago(t, NEW_PARTNER_MONTHS)
 
     # Все сделки людей, которые встречаются в ветках этих людей
     def branch(pid):
@@ -107,7 +108,7 @@ def facts(person_ids, persons, children):
             "gruppe_12": 0.0, "np_12": 0.0,
             "direct_partners": sum(1 for c in children.get(pid, []) if c["active"]),
         }
-        monthly = [0.0] * len(months)
+        f["last3"] = 0.0
         for oid in branches[pid]:
             is_new = oid != pid and (joined(oid) or dt.date(1970, 1, 1)) >= np_since
             for d, k in deals.get(oid, []):
@@ -117,13 +118,8 @@ def facts(person_ids, persons, children):
                     f["gruppe_12"] += k
                     if is_new:
                         f["np_12"] += k
-                i = midx.get((d.year, d.month))
-                if i is not None:
-                    monthly[i] += k
-        triples = [sum(monthly[i:i + 3]) for i in range(len(monthly) - 2)]
-        f["best3"] = max(triples) if triples else 0
-        f["last3"] = sum(monthly[-3:])
-        f["monthly"] = monthly
+                if d > m3:
+                    f["last3"] += k
         out[pid] = f
     return out
 
@@ -136,6 +132,7 @@ def _crit(label, value, target, unit="ед.", hint=None):
 
 def plan_for(person, f):
     """Шаги к следующим ступеням: [{target, title, path, options: [[критерии]], pct, done}]."""
+    m3 = months_ago(today(), 3)
     steps = []
     for target in next_targets(person["stufe"]):
         title = C.label(C.STUFEN, target)
@@ -148,8 +145,8 @@ def plan_for(person, f):
             ]
             note = "Нужно одно из двух: 450 единиц или 300 единиц и 2 VM."
         elif target == "AL":
-            options = [[_crit("Netto Gesamt за 3 месяца подряд (лучшие 3 месяца за год)", f["best3"], AL_UNITS,
-                              hint=f"последние 3 месяца: {round(f['last3'])}")]]
+            options = [[_crit("Netto Gesamt за последние 3 месяца", f["last3"], AL_UNITS,
+                              hint=f"с {(m3 + dt.timedelta(days=1)).strftime('%d.%m.%Y')}")]]
             note = "Переход в Hauptberuf: 600 единиц Netto Gesamt за 3 месяца подряд."
         elif target in TEAM_RULES:
             r = TEAM_RULES[target]

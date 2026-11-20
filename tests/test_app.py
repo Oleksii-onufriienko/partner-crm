@@ -358,7 +358,7 @@ class CareerRulesTest(unittest.TestCase):
     def facts(self, **kw):
         import datetime as dt
         f = {"eigen_all": 0, "eigen_12": 0, "eigen_since": 0, "since": dt.date(2026, 1, 1), "gruppe_12": 0,
-             "np_12": 0, "direct_partners": 0, "best3": 0, "last3": 0}
+             "np_12": 0, "direct_partners": 0, "last3": 0}
         f.update(kw)
         return f
 
@@ -382,10 +382,18 @@ class CareerRulesTest(unittest.TestCase):
         self.assertTrue(st["done"])
         self.assertEqual(st["best"], 1)
 
-    def test_al_needs_600_in_three_months(self):
-        st = self.plan("VBAK", best3=450)[0]
+    def test_al_needs_600_in_last_three_months(self):
+        st = self.plan("VBAK", last3=450)[0]
         self.assertEqual(st["pct"], 75)
-        self.assertTrue(self.plan("VBAK", best3=600)[0]["done"])
+        self.assertTrue(self.plan("VBAK", last3=600)[0]["done"])
+
+    def test_windows_are_last_months(self):
+        import datetime as dt
+        from crm.career import months_ago
+        self.assertEqual(months_ago(dt.date(2026, 11, 20), 3), dt.date(2026, 8, 20))
+        self.assertEqual(months_ago(dt.date(2026, 11, 20), 12), dt.date(2025, 11, 20))
+        self.assertEqual(months_ago(dt.date(2026, 5, 31), 3), dt.date(2026, 2, 28))
+        self.assertEqual(months_ago(dt.date(2026, 1, 15), 36), dt.date(2023, 1, 15))
 
     def test_rgs_caps_own_units(self):
         # 3 000 лично засчитываются только как 2 400: 2 400 + 1 500 группы = 3 900 < 4 000
