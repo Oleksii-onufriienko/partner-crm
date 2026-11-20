@@ -269,8 +269,6 @@ def signals(persons, settings=None, all_rules=False):
             lst.append(Signal("stale", f"Не отмечен итог прошедших встреч: {stale_planned[pid]}"))
         if on["no_week_plan"] and pid not in has_week_plan:
             lst.append(Signal("no_week_plan", "Не заполнен план на эту неделю"))
-        if on["no_coef"] and p["coef"] is None:
-            lst.append(Signal("no_coef", "Не указан коэффициент €/KE"))
         out[pid] = lst
     return out
 
