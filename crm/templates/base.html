@@ -59,6 +59,7 @@
     <form class="viewbar{{ ' other' if other }}" method="get" action="{{ url_for('main.view_as') }}" role="search" aria-label="Чьи данные показывать">
       <span class="avatar">{{ view_person|initials }}</span>
       <label class="viewbar-label" for="viewbar-person">{{ 'Смотрю данные партнёра' if other else 'Мои данные' }}</label>
+      <span class="viewbar-stufe" title="Ступень: {{ view_person['stufe']|label(C.STUFEN) }}">{{ view_person['stufe'] }}</span>
       {{ person_select('person', view_options, view_person['id'], attrs='id="viewbar-person" data-autosubmit') }}
       <input type="hidden" name="next" value="{{ view_next }}">
       <noscript><button class="btn small">Показать</button></noscript>
