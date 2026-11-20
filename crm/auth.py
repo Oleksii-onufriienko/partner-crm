@@ -6,7 +6,7 @@ import re
 import secrets
 import time
 
-from flask import (Blueprint, abort, flash, g, redirect, render_template, request,
+from flask import (Blueprint, abort, current_app, flash, g, redirect, render_template, request,
                    session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -178,7 +178,8 @@ def create_invite(person_id):
     expires = (dt.datetime.now() + dt.timedelta(days=INVITE_DAYS)).isoformat(timespec="minutes")
     execute("UPDATE persons SET invite_hash = ?, invite_expires = ? WHERE id = ?",
             (hash_token(token), expires, person_id))
-    return url_for("auth.accept_invite", token=token, _external=True), expires
+    scheme = "https" if current_app.config.get("SESSION_COOKIE_SECURE") else None
+    return url_for("auth.accept_invite", token=token, _external=True, _scheme=scheme), expires
 
 
 @bp.route("/invite/<token>", methods=["GET", "POST"])
